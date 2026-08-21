@@ -27,6 +27,11 @@ export interface Marker {
   label: string;
 }
 
+/** A marker as stored, carrying the key needed to rename or remove it. */
+export interface StoredMarker extends Marker {
+  key: number;
+}
+
 export interface Session {
   id: string;
   name: string;
@@ -112,6 +117,58 @@ export async function addMarker(sessionId: string, marker: Marker) {
   get.onsuccess = () => {
     const s = get.result as Session | undefined;
     if (s) sessions.put({ ...s, markerCount: s.markerCount + 1 });
+  };
+  await done(tx);
+  db.close();
+}
+
+/**
+ * The marks made during a session, oldest first.
+ *
+ * Returned with their IndexedDB keys, because a mark made on a moving bus is
+ * provisional: it needs a name adding later, and a mis-tap needs removing.
+ */
+export async function listMarkers(sessionId: string): Promise<StoredMarker[]> {
+  const db = await open();
+  const tx = db.transaction('markers', 'readonly');
+  const store = tx.objectStore('markers').index('session');
+  const req = store.openCursor(IDBKeyRange.only(sessionId));
+  const out: StoredMarker[] = [];
+  req.onsuccess = () => {
+    const cur = req.result;
+    if (!cur) return;
+    const v = cur.value as Marker & { sessionId: string };
+    out.push({ key: cur.primaryKey as number, t: v.t, lat: v.lat, lng: v.lng, label: v.label });
+    cur.continue();
+  };
+  await done(tx);
+  db.close();
+  return out.sort((a, b) => a.t - b.t);
+}
+
+/** Name a mark after the fact — the whole point of marking with one tap. */
+export async function renameMarker(key: number, label: string) {
+  const db = await open();
+  const tx = db.transaction('markers', 'readwrite');
+  const store = tx.objectStore('markers');
+  const get = store.get(key);
+  get.onsuccess = () => {
+    if (get.result) store.put({ ...get.result, label }, key);
+  };
+  await done(tx);
+  db.close();
+}
+
+/** Undo a mis-tap. Keeps the session's marker count honest. */
+export async function deleteMarker(key: number, sessionId: string) {
+  const db = await open();
+  const tx = db.transaction(['markers', 'sessions'], 'readwrite');
+  tx.objectStore('markers').delete(key);
+  const sessions = tx.objectStore('sessions');
+  const get = sessions.get(sessionId);
+  get.onsuccess = () => {
+    const s = get.result as Session | undefined;
+    if (s) sessions.put({ ...s, markerCount: Math.max(0, s.markerCount - 1) });
   };
   await done(tx);
   db.close();

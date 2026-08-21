@@ -4,8 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { PinGate } from '@/components/PinGate';
 import { authFetch } from '@/lib/client-auth';
+import { haptic } from '@/lib/device';
+import { fmtClock } from '@/lib/format';
 import {
-  addMarker, appendFixes, createSession, deleteSession, exportSession,
+  addMarker, appendFixes, createSession, deleteSession, deleteMarker, exportSession,
+  listMarkers, renameMarker, type StoredMarker,
   listSessions, storageEstimate, type Fix, type Session,
 } from '@/lib/recorder-db';
 
@@ -52,6 +55,10 @@ function RecordPageInner() {
 
   const [fixCount, setFixCount] = useState(0);
   const [markerCount, setMarkerCount] = useState(0);
+  const [marks, setMarks] = useState<StoredMarker[]>([]);
+  const [justMarked, setJustMarked] = useState(false);
+  /** True once a fix accurate enough to mark a stop with has arrived. */
+  const [hasFix, setHasFix] = useState(false);
   const [distanceM, setDistanceM] = useState(0);
   const [elapsed, setElapsed] = useState(0);
   const [acc, setAcc] = useState<number | null>(null);
@@ -109,6 +116,7 @@ function RecordPageInner() {
     buffer.current = []; last.current = null;
     dist.current = 0; count.current = 0;
     setFixCount(0); setMarkerCount(0); setDistanceM(0); setElapsed(0); setPending(0);
+    setMarks([]); setHasFix(false);
 
     try {
       const nav = navigator as unknown as {
@@ -133,7 +141,7 @@ function RecordPageInner() {
           const step = haversine(last.current, fix);
           if (step < 400) dist.current += step;
         }
-        if ((fix.acc ?? 999) < 50) last.current = fix;
+        if ((fix.acc ?? 999) < 50) { last.current = fix; setHasFix(true); }
 
         buffer.current.push(fix);
         count.current += 1;
@@ -143,7 +151,7 @@ function RecordPageInner() {
         setAcc(fix.acc);
         setSpd(fix.spd);
       },
-      (e) => setErr(`GPS: ${e.message}`),
+      (e) => setErr(e.message ? `GPS: ${e.message}` : 'GPS signal lost — hold the phone near a window.'),
       { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
     );
 
@@ -176,13 +184,41 @@ function RecordPageInner() {
     await refresh();
   }, [flush, refresh]);
 
+  /**
+   * Flag a stop. ONE TAP — no name asked for.
+   *
+   * It used to open a prompt() for the stop name, which meant standing on a
+   * bus that halts for twenty seconds and typing a village name into a modal
+   * before the mark was saved. Miss the window and the position is wrong or
+   * the mark never happens at all. The position is the part that cannot be
+   * recovered later; the name can be typed at the next red light, or at home
+   * that evening. So capture the position instantly and name it afterwards.
+   */
   const mark = useCallback(async () => {
     const s = sessionRef.current;
     const l = last.current;
     if (!s || !l) return;
-    const label = prompt('Stop name (leave blank to name it later)')?.trim() || '';
-    await addMarker(s.id, { t: Date.now(), lat: l.lat, lng: l.lng, label });
+    haptic('select');
+    await addMarker(s.id, { t: Date.now(), lat: l.lat, lng: l.lng, label: '' });
     setMarkerCount((m) => m + 1);
+    setMarks(await listMarkers(s.id));
+    // Confirm it landed without the rider having to read anything.
+    setJustMarked(true);
+    setTimeout(() => setJustMarked(false), 1200);
+  }, []);
+
+  const nameMark = useCallback(async (key: number, label: string) => {
+    setMarks((ms) => ms.map((m) => (m.key === key ? { ...m, label } : m)));
+    await renameMarker(key, label);
+  }, []);
+
+  const removeMark = useCallback(async (key: number) => {
+    const s = sessionRef.current;
+    if (!s) return;
+    haptic('tick');
+    await deleteMarker(key, s.id);
+    setMarks(await listMarkers(s.id));
+    setMarkerCount((m) => Math.max(0, m - 1));
   }, []);
 
   // Flush whenever the phone backgrounds the tab — that is exactly when a
@@ -295,7 +331,16 @@ function RecordPageInner() {
               <button className="btn" data-primary="true" onClick={start}>● Start recording</button>
             ) : (
               <>
-                <button className="btn" data-primary="true" onClick={mark}>⚑ Mark stop</button>
+                <button
+                  className="btn mark-btn"
+                  data-primary="true"
+                  data-flash={justMarked || undefined}
+                  onClick={mark}
+                  disabled={!hasFix}
+                  title={hasFix ? 'Flag this stop' : 'Waiting for a GPS fix'}
+                >
+                  {justMarked ? '✓ Marked' : hasFix ? '⚑ Mark stop' : '⚑ Waiting for GPS…'}
+                </button>
                 <button className="btn" data-danger="true" onClick={stop}>■ Finish</button>
               </>
             )}
@@ -303,6 +348,45 @@ function RecordPageInner() {
 
           {err && <div className="note" style={{ borderLeftColor: 'var(--bad)' }}>{err}</div>}
         </div>
+
+        {recording && marks.length > 0 && (
+          <div className="card">
+            <div className="card-head">
+              <div className="card-title">Stops flagged</div>
+              <div style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--dimmer)' }}>
+                {marks.length}
+              </div>
+            </div>
+            <div className="card-body">
+              <div className="note" style={{ marginTop: 0, marginBottom: 12 }}>
+                Names can wait. Tap the flag at every stop and fill these in when
+                the bus is moving, or after the ride.
+              </div>
+              {/* Newest first: the one just flagged is the one being named. */}
+              {[...marks].reverse().map((m, i) => (
+                <div className="markrow" key={m.key}>
+                  <div className="markrow-n num">{marks.length - i}</div>
+                  <input
+                    className="markrow-name"
+                    value={m.label}
+                    placeholder="Stop name…"
+                    aria-label={'Name for stop ' + (marks.length - i)}
+                    onChange={(e) => void nameMark(m.key, e.target.value)}
+                  />
+                  <div className="markrow-t num">{fmtClock(m.t)}</div>
+                  <button
+                    className="markrow-x"
+                    onClick={() => void removeMark(m.key)}
+                    aria-label={'Remove stop ' + (marks.length - i)}
+                    title="Remove — tapped by mistake"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {recording && (
           <div className="stat-grid">
