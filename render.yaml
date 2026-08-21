@@ -1,0 +1,25 @@
+# One-click config for Render's free tier.
+#
+#   render.com → New → Blueprint → point at this repo
+#
+# Notes that matter:
+#   · No PORT is set here on purpose. Render injects one, and `next start`
+#     honours it. Pinning a port is the usual reason a deploy never responds.
+#   · Do NOT run server.mjs in production — that is the local host with a
+#     self-signed certificate, and there is no openssl in the container.
+#     Render terminates TLS for you.
+services:
+  - type: web
+    name: campus-bus
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/network
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Set this in the Render dashboard, not here. Without it, /drive and
+      # /admin are open to anyone who finds the URL.
+      - key: ADMIN_PIN
+        sync: false

@@ -1,0 +1,19 @@
+{
+  "name": "Campus Bus — SVPCET",
+  "short_name": "Campus Bus",
+  "description": "Live college bus tracking and route recording for SVPCET, Puttur.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080b11",
+  "theme_color": "#080b11",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon-maskable.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Record a route", "url": "/record" },
+    { "name": "Drive", "url": "/drive" }
+  ]
+}

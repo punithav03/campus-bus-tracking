@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+# Runtime only. The route itself (data/routes, data/network.json) IS committed
+# — without it the deployed app has no bus route at all.
+data/trips/*.jsonl
+data/recordings/*.json
+.DS_Store
+
+.cert/

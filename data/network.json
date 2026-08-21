@@ -1,0 +1,26 @@
+{
+  "campus": {
+    "name": "SVPCET",
+    "fullName": "Sri Venkatesa Perumal College of Engineering & Technology",
+    "address": "RVS Nagar, K N Road, Puttur, Tirupati Dist., Andhra Pradesh 517583",
+    "lat": 13.43312,
+    "lng": 79.50944,
+    "catchmentKm": 50
+  },
+  "routes": [
+    {
+      "id": "route-1",
+      "code": "1",
+      "name": "Nagalapuram — Campus",
+      "short": "Nagalapuram Line",
+      "color": "#f97316",
+      "schedStart": "07:05",
+      "lengthM": 40150,
+      "durationS": 4263,
+      "stopCount": 19,
+      "firstStop": "Nagalapuram Bus Stand",
+      "lastStop": "SVPCET"
+    }
+  ],
+  "generatedAt": "2026-08-20T15:22:55.634Z"
+}
