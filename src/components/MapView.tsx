@@ -58,27 +58,55 @@ interface Props {
 }
 
 /**
- * `styledata` fires several times while a style loads, and the first firing is
- * usually too early — isStyleLoaded() is still false, so anything drawn then is
- * silently dropped. That is why the route vanished when switching basemaps.
- * Wait for the style to genuinely be ready, with a polling backstop in case the
- * event we want never arrives.
+ * Waits for a style to genuinely be ready.
+ *
+ * The subtle part is `skipSync`. Right after setStyle() is called the map is
+ * still holding the OLD style, so isStyleLoaded() answers `true` — about the
+ * previous style. Taking that as a green light draws the route onto a style
+ * that is seconds from being thrown away, and when the new one lands it takes
+ * the route with it. That is the "line disappears when I switch the map" bug,
+ * and it only showed up sometimes because it is a race with the network: a
+ * cached style JSON lands fast enough to wipe the line, an uncached one does
+ * not. So after a setStyle we refuse the synchronous answer and insist on
+ * seeing a fresh styledata event first.
  */
-function whenStyleReady(m: MlMap, cb: () => void) {
-  if (m.isStyleLoaded()) { cb(); return () => {}; }
+function whenStyleReady(m: MlMap, cb: () => void, skipSync = false) {
+  if (!skipSync && m.isStyleLoaded()) { cb(); return () => {}; }
   let done = false;
   const finish = () => {
     if (done) return;
     done = true;
     m.off('styledata', onData);
     clearInterval(poll);
+    clearTimeout(giveUp);
     cb();
   };
   const onData = () => { if (m.isStyleLoaded()) finish(); };
   m.on('styledata', onData);
   const poll = setInterval(() => { if (m.isStyleLoaded()) finish(); }, 120);
   const giveUp = setTimeout(finish, 6000);
-  return () => { clearInterval(poll); clearTimeout(giveUp); m.off('styledata', onData); };
+  return () => {
+    done = true;
+    clearInterval(poll); clearTimeout(giveUp); m.off('styledata', onData);
+  };
+}
+
+/**
+ * Resolves a basemap to something setStyle can be trusted with.
+ *
+ * Checking up front is what makes the failure mode honest: either we hand
+ * MapLibre a style we have just confirmed is reachable, or we hand it the
+ * offline canvas deliberately. There is no third state where the map is blank
+ * and nobody knows why.
+ */
+async function loadStyle(url: string): Promise<string | StyleSpecification> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
+    if (!res.ok) throw new Error(String(res.status));
+    return url;
+  } catch {
+    return OFFLINE_STYLE;
+  }
 }
 
 export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
@@ -90,9 +118,14 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
 
   const shown = useRef<{ lng: number; lat: number } | null>(null);
   const target = useRef<{ lng: number; lat: number } | null>(null);
+  /** Displayed heading, eased separately so the bus swings rather than snaps. */
+  const heading = useRef<number | null>(null);
+  const headingTarget = useRef(0);
   const fittedFor = useRef<string | null>(null);
   /** Cancels a half-finished draw animation when another draw starts. */
   const drawToken = useRef(0);
+  /** Tears down the watcher for a style swap that has been superseded. */
+  const styleWatch = useRef<(() => void) | null>(null);
 
   const [styleId, setStyleId] = useState<string>(DEFAULT_STYLE);
   const [ready, setReady] = useState(false);
@@ -150,11 +183,7 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
 
   // ---- draw our own geometry ----------------------------------------------
   // Re-run after every style change: setStyle() wipes custom sources & layers.
-  const drawRoute = useCallback(() => {
-    const m = map.current;
-    const r = routeRef.current;
-    if (!m || !m.isStyleLoaded()) return;
-
+  const drawNow = useCallback((m: MlMap, r: MapRoute | null) => {
     const token = ++drawToken.current;
 
     for (const s of stopMarkers.current) s.remove();
@@ -198,19 +227,31 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     paintGradient(m);
 
     // Draw the line on rather than flashing it in.
-    let t = 0;
+    //
+    // Time-based, not frame-based: requestAnimationFrame is suspended while the
+    // tab is hidden, so a frame-counted version that started at opacity 0 and
+    // was then backgrounded left the route invisible. And because even a
+    // time-based loop needs a frame to run at all, a timer forces the final
+    // values regardless. The route being visible is not allowed to depend on
+    // an animation completing.
+    const DRAW_MS = 620;
+    const at = (e: number) => {
+      if (!m.getLayer('route-line') || !m.getLayer('route-casing')) return;
+      m.setPaintProperty('route-line', 'line-opacity', e);
+      m.setPaintProperty('route-casing', 'line-opacity', e * (dark ? 0.6 : 0.9));
+      m.setPaintProperty('route-line', 'line-width', 2 + e * 3);
+      m.setPaintProperty('route-casing', 'line-width', 4 + e * 6);
+    };
+    const t0 = performance.now();
     const grow = () => {
-      if (token !== drawToken.current || !m.getLayer('route-line')) return;
-      t = Math.min(1, t + 0.04);
-      const eased = 1 - Math.pow(1 - t, 3);
-      m.setPaintProperty('route-line', 'line-opacity', eased);
-      m.setPaintProperty('route-casing', 'line-opacity', eased * (dark ? 0.6 : 0.9));
-      m.setPaintProperty('route-line', 'line-width', 2 + eased * 3);
-      m.setPaintProperty('route-casing', 'line-width', 4 + eased * 6);
+      if (token !== drawToken.current) return;
+      const t = Math.min(1, (performance.now() - t0) / DRAW_MS);
+      at(1 - Math.pow(1 - t, 3));
       if (t < 1) requestAnimationFrame(grow);
     };
-    m.setPaintProperty('route-line', 'line-opacity', 0);
+    at(0);
     requestAnimationFrame(grow);
+    setTimeout(() => { if (token === drawToken.current) at(1); }, DRAW_MS + 260);
 
     r.stops.forEach((s, i) => {
       const el = document.createElement('div');
@@ -239,24 +280,50 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     }
   }, [paintGradient]);
 
+  /**
+   * Every entry point goes through here, so the guards live in exactly one place.
+   *
+   * Deliberately NOT gated on isStyleLoaded(). That looks like the obvious
+   * check and it is the wrong one: MapLibre reports a style as loaded only once
+   * every source cache has finished fetching its TILES, so on a slow tile
+   * server it stays false for many seconds — and on a map that is still
+   * fetching as you pan, longer. Our route, stops and bus are our own geometry
+   * and owe the basemap nothing, yet gating on that flag made them wait for it.
+   * Measured: a map visible at 1.7s with no route on it until 19s.
+   *
+   * So: just try. addSource/addLayer throw while the style document itself is
+   * still parsing, which is a much shorter window, and the reconciler retries
+   * a few hundred milliseconds later. Attempting and failing is cheap;
+   * waiting for the wrong signal was not.
+   */
+  const drawRoute = useCallback(() => {
+    const m = map.current;
+    if (!m) return false;
+    try {
+      drawNow(m, routeRef.current);
+      return true;
+    } catch {
+      return false; // style not ready to accept layers yet — the reconciler retries
+    }
+  }, [drawNow]);
+
   // ---- create the map once -------------------------------------------------
   useEffect(() => {
     if (!holder.current || map.current) return;
     let cancelled = false;
+    let styleTimer: ReturnType<typeof setTimeout> | null = null;
 
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('campusbus.mapstyle') : null;
     const initial = styleDef(saved ?? DEFAULT_STYLE);
     if (initial.id !== DEFAULT_STYLE) { setStyleId(initial.id); styleRef.current = initial.id; }
 
     (async () => {
-      let style: string | StyleSpecification = initial.url;
-      try {
-        const res = await fetch(initial.url, { signal: AbortSignal.timeout(7000) });
-        if (!res.ok) throw new Error(String(res.status));
-      } catch {
-        style = OFFLINE_STYLE;
-        if (!cancelled) setOffline(true);
-      }
+      // Straight to MapLibre with the URL. Validating it with our own fetch
+      // first cost a full round trip before the map could even begin, and
+      // time-to-first-map is the number a student actually feels. Reachability
+      // is proven by the style arriving, not by asking twice — the watchdog
+      // below covers the case where it never does.
+      const style: string | StyleSpecification = initial.url;
       if (cancelled || !holder.current) return;
 
       const m = new maplibregl.Map({
@@ -268,30 +335,105 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
         fadeDuration: 120,
       });
       m.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
-      m.on('load', () => { setReady(true); drawRoute(); });
+      // 'styledata' is the earliest point the style can accept our layers;
+      // 'load' additionally waits for the first tile render, which is later
+      // than we need. Draw at the first opportunity and let the reconciler
+      // cover any attempt that was still too early.
+      let styleArrived = false;
+      m.on('styledata', () => { styleArrived = true; drawRoute(); });
+      m.on('load', () => { styleArrived = true; setReady(true); drawRoute(); });
+
+      // If the style never turns up — captive portal, blocked host, no data —
+      // fall back to the plain canvas so the route is still drawn on something
+      // rather than leaving a permanently blank rectangle with no explanation.
+      styleTimer = setTimeout(() => {
+        if (cancelled || styleArrived) return;
+        setOffline(true);
+        try { m.setStyle(OFFLINE_STYLE, { diff: false }); } catch { /* torn down */ }
+      }, 9000);
+
+      // MapLibre emits `error` for every resource it cannot fetch — a tile at
+      // the edge of the viewport, a glyph range for a script no label uses.
+      // None of those mean the map is broken, and reacting to them would blank
+      // a perfectly good basemap. Swallow them: unhandled, they are just noise
+      // in the student's console. Whether a STYLE is reachable is decided by
+      // fetching it before we ever hand it to setStyle (see loadStyle).
+      m.on('error', () => { /* non-fatal by definition — see comment above */ });
       map.current = m;
     })();
 
     return () => {
       cancelled = true;
+      if (styleTimer) clearTimeout(styleTimer);
       map.current?.remove();
       map.current = null;
     };
   }, [drawRoute]);
 
   // ---- swap basemap --------------------------------------------------------
-  const changeStyle = (id: string) => {
+  /** Guards against a slow style landing after the user has picked another. */
+  const styleReq = useRef(0);
+
+  const changeStyle = async (id: string) => {
     const m = map.current;
     const def = MAP_STYLES.find((s) => s.id === id);
     if (!m || !def) return;
+    const req = ++styleReq.current;
+
     setStyleId(id);
     styleRef.current = id; // drawRoute reads this synchronously, before React re-renders
-    localStorage.setItem('campusbus.mapstyle', id);
-    m.setStyle(def.url);
-    whenStyleReady(m, drawRoute);
+    try { localStorage.setItem('campusbus.mapstyle', id); } catch { /* private mode */ }
+
+    const resolved = await loadStyle(def.url);
+    if (req !== styleReq.current || !map.current) return; // superseded mid-fetch
+    setOffline(resolved !== def.url);
+
+    // A second switch while the first is still loading would otherwise leave
+    // two watchers running, and the older one draws with the older style's
+    // colours the moment ANY style settles.
+    styleWatch.current?.();
+    // diff:false — these six styles share nothing but their data source, so
+    // morphing one into another has no payoff and actively misbehaves: mid-diff
+    // MapLibre asks the NEW glyph endpoint for the OLD style's font names
+    // (VersaTiles spells it noto_sans_regular, OpenFreeMap spells it Noto Sans
+    // Regular), which 404s until it settles. A clean teardown avoids the whole
+    // class of problem and makes the wipe deterministic for our redraw.
+    m.setStyle(resolved, { diff: false });
+    styleWatch.current = whenStyleReady(m, drawRoute, true);
   };
 
-  useEffect(() => { if (ready) drawRoute(); }, [ready, route, myStopId, drawRoute]);
+  // Not gated on `ready` either — drawRoute is safe to call at any time now,
+  // and waiting would just hand the work to the reconciler a tick later.
+  useEffect(() => { drawRoute(); }, [ready, route, myStopId, drawRoute]);
+
+  /**
+   * The backstop, and the reason the route can no longer go missing.
+   *
+   * Every other path here is event-driven, and events are exactly what a style
+   * swap makes unreliable — they fire early, they fire for unrelated reasons,
+   * and a swap that fails fires nothing useful at all. Rather than trying to
+   * predict the right moment, this checks the only thing that actually matters:
+   * the style is loaded, we have a route, so is the line ON the map? If not,
+   * draw it. Outcome, not lifecycle.
+   *
+   * Costs one getLayer() call every 700ms, and it is the difference between
+   * "usually works" and "works".
+   */
+  useEffect(() => {
+    const iv = setInterval(() => {
+      const m = map.current;
+      if (!m || !routeRef.current) return;
+      try {
+        if (!m.getLayer('route-line') || !m.getSource('route')) drawRoute();
+      } catch {
+        // getLayer itself throws before the style exists; try again next tick.
+      }
+    }, 400);
+    return () => clearInterval(iv);
+  }, [drawRoute]);
+
+  // Tear down a pending style watcher when the map goes away.
+  useEffect(() => () => { styleWatch.current?.(); }, []);
 
   useEffect(() => {
     const m = map.current;
@@ -361,7 +503,12 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   // ---- the bus -------------------------------------------------------------
   useEffect(() => {
     const m = map.current;
-    if (!m || !ready) return;
+    // Not gated on `ready` (the map's 'load' event) for the same reason
+    // drawRoute is not gated on isStyleLoaded: 'load' waits for the first tile
+    // render, so a slow tile server left the bus off the map entirely while
+    // the route was already drawn. A Marker is a DOM overlay — it needs the
+    // map object, nothing more.
+    if (!m) return;
 
     if (!bus) {
       busMarker.current?.remove();
@@ -372,10 +519,21 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     }
 
     target.current = { lng: bus.lng, lat: bus.lat };
+    headingTarget.current = bus.bearing;
+    if (heading.current == null) heading.current = bus.bearing;
     if (!busMarker.current) {
       const el = document.createElement('div');
       el.className = 'bus-marker';
-      el.innerHTML = '<span class="bus-pulse"></span><span class="bus-glyph">🚌</span>';
+      el.innerHTML =
+        '<span class="bus-pulse"></span>' +
+        '<span class="bus-glyph"><svg viewBox="0 0 24 24" aria-hidden>' +
+        // Nose at the top: rotating an emoji would just spin a side-on bus.
+        '<path d="M12 2c-3 0-5 1.3-5 3.2v13c0 1 .7 1.8 1.6 1.8h6.8c.9 0 1.6-.8 1.6-1.8v-13C17 3.3 15 2 12 2z" fill="currentColor"/>' +
+        '<rect x="8.4" y="4.6" width="7.2" height="4.2" rx="1.4" fill="rgba(255,255,255,.92)"/>' +
+        '<rect x="8.6" y="10.4" width="6.8" height="1.5" rx=".75" fill="rgba(255,255,255,.55)"/>' +
+        '<circle cx="9.3" cy="18.4" r="1" fill="rgba(255,255,255,.8)"/>' +
+        '<circle cx="14.7" cy="18.4" r="1" fill="rgba(255,255,255,.8)"/>' +
+        '</svg></span>';
       busMarker.current = new maplibregl.Marker({ element: el })
         .setLngLat([bus.lng, bus.lat])
         .addTo(m);
@@ -402,6 +560,16 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       };
       shown.current = next;
       mk.setLngLat([next.lng, next.lat]);
+
+      // Take the short way round: 350° to 10° is a 20° nudge, not a 340° spin.
+      if (heading.current != null) {
+        let delta = ((headingTarget.current - heading.current + 540) % 360) - 180;
+        heading.current = (heading.current + delta * 0.14 + 360) % 360;
+        // A slight lean into the turn — how much it is still turning, not where.
+        const lean = Math.max(-9, Math.min(9, delta * 0.5));
+        mk.getElement().style.setProperty('--bearing', heading.current.toFixed(1) + 'deg');
+        mk.getElement().style.setProperty('--lean', lean.toFixed(1) + 'deg');
+      }
       if (follow && m && ++ticks % 30 === 0) {
         m.easeTo({ center: [next.lng, next.lat], duration: 900, padding: visiblePadding() });
       }
@@ -429,7 +597,7 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
         <select
           className="map-style"
           value={styleId}
-          onChange={(e) => changeStyle(e.target.value)}
+          onChange={(e) => void changeStyle(e.target.value)}
           aria-label="Basemap style"
         >
           {MAP_STYLES.map((s) => (

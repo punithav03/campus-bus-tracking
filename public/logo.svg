@@ -1,7 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" fill="#FFFFFF"/>
-  <g transform="translate(256 268) scale(0.60) translate(-256 -256)">
-<defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Campus Bus">
+  <!--
+    A map pin split down the middle: amber on one side, navy on the other, with
+    the bus riding inside it. Drawn as flat geometry rather than traced from a
+    raster so it stays crisp from 512px down to the 24px header mark, and so the
+    two halves can be recoloured independently.
+  -->
+  <defs>
     <path id="cb-pin"
           d="M256 26c95 0 172 77 172 172 0 62-50 140-149 236a33 33 0 0 1-46 0C134 338 84 260 84 198 84 103 161 26 256 26z"/>
     <clipPath id="cb-left"><rect x="0" y="0" width="256" height="512"/></clipPath>
@@ -22,5 +26,4 @@
   <rect x="240" y="214" width="32" height="11" rx="5.5" fill="#FFFFFF"/>
   <rect x="198" y="256" width="26" height="26" rx="8" fill="#16305B"/>
   <rect x="288" y="256" width="26" height="26" rx="8" fill="#16305B"/>
-  </g>
 </svg>

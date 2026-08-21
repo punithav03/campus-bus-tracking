@@ -1,6 +1,8 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { fmtEta, fmtClock } from '@/lib/format';
+import { haptic } from '@/lib/device';
 import type { StopView } from '@/lib/types';
 
 const ROW_H = 42;
@@ -25,6 +27,48 @@ export function StripMap({
   busDistM: number | null;
   hasTrip: boolean;
 }) {
+  // A stop going from ahead to passed is the one moment on this screen worth
+  // marking. Diff it here rather than reading it off the server, because the
+  // server only reports state — it has no idea what the screen showed a second
+  // ago, and the transition is what the animation needs.
+  const seen = useRef<Set<string>>(new Set());
+  /** First poll only tells us what is ALREADY passed — that is state, not news. */
+  const primed = useRef(false);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const [justPassed, setJustPassed] = useState<Set<string>>(new Set());
+
+  useEffect(() => () => { timers.current.forEach(clearTimeout); }, []);
+
+  useEffect(() => {
+    if (!stops.length) return;
+    const fresh: string[] = [];
+    for (const s of stops) {
+      if (s.passed && !seen.current.has(s.id)) {
+        if (primed.current) fresh.push(s.id);
+        seen.current.add(s.id);
+      }
+      if (!s.passed) seen.current.delete(s.id);
+    }
+    primed.current = true;
+    if (!fresh.length) return;
+
+    // Feel it if it was YOUR stop; the rest are just visual.
+    // 'select', not 'alert' — alert means LEAVE NOW. This is a confirmation.
+    if (myStopId && fresh.includes(myStopId)) haptic('select');
+
+    setJustPassed((prev) => new Set([...prev, ...fresh]));
+    // The timer is owned by the component, not by this effect run. Returning it
+    // as cleanup would mean the very next poll cancels it and the flag sticks on
+    // forever, which is how the row ended up permanently mid-animation.
+    timers.current.push(setTimeout(() => {
+      setJustPassed((prev) => {
+        const next = new Set(prev);
+        fresh.forEach((id) => next.delete(id));
+        return next;
+      });
+    }, 1400));
+  }, [stops, myStopId]);
+
   // Where the bus puck sits on the rail: interpolate between the two stops it
   // is currently between, so it slides smoothly rather than jumping row to row.
   let busTop: number | null = null;
@@ -52,6 +96,7 @@ export function StripMap({
           className="strow"
           style={{ ['--c' as string]: color, height: ROW_H }}
           data-passed={s.passed}
+          data-just={justPassed.has(s.id) || undefined}
           data-mine={s.id === myStopId}
           onClick={() => onPick(s.id)}
           role="button"
@@ -59,7 +104,9 @@ export function StripMap({
           onKeyDown={(e) => e.key === 'Enter' && onPick(s.id)}
         >
           <div className="strow-rail">
-            <div className="strow-node" />
+            <div className="strow-node">
+              <span className="strow-ping" />
+            </div>
           </div>
           <div className="strow-name">
             {s.name}
@@ -73,7 +120,14 @@ export function StripMap({
             )}
           </div>
           {s.passed ? (
-            <div className="strow-eta-passed num">
+            <div
+              className="strow-eta-passed num"
+              title={
+                s.halted === false ? 'Went past without stopping'
+                  : s.halted ? 'Stopped here'
+                  : undefined
+              }
+            >
               {s.arrivedAt ? fmtClock(s.arrivedAt) : 'passed'}
             </div>
           ) : (

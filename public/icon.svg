@@ -1,31 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
-      <stop offset="0" stop-color="#fb923c"/>
-      <stop offset="1" stop-color="#c2410c"/>
-    </linearGradient>
+  <rect width="512" height="512" rx="112" fill="#FFFFFF"/>
+  <g transform="translate(256 262) scale(0.78) translate(-256 -256)">
+<defs>
+    <path id="cb-pin"
+          d="M256 26c95 0 172 77 172 172 0 62-50 140-149 236a33 33 0 0 1-46 0C134 338 84 260 84 198 84 103 161 26 256 26z"/>
+    <clipPath id="cb-left"><rect x="0" y="0" width="256" height="512"/></clipPath>
+    <clipPath id="cb-right"><rect x="256" y="0" width="256" height="512"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="112" fill="#080b11"/>
-  <rect x="56" y="56" width="400" height="400" rx="88" fill="url(#g)"/>
-  <g fill="#080b11">
-    <rect x="150" y="120" width="212" height="230" rx="42"/>
-  </g>
-  <g fill="#fdba74">
-    <rect x="174" y="156" width="164" height="76" rx="18"/>
-  </g>
-  <g fill="#080b11">
-    <circle cx="196" cy="286" r="20"/>
-    <circle cx="316" cy="286" r="20"/>
-  </g>
-  <g fill="#fdba74">
-    <rect x="166" y="326" width="180" height="16" rx="8"/>
-  </g>
-  <g fill="#080b11">
-    <circle cx="196" cy="374" r="34"/>
-    <circle cx="316" cy="374" r="34"/>
-  </g>
-  <g fill="url(#g)">
-    <circle cx="196" cy="374" r="15"/>
-    <circle cx="316" cy="374" r="15"/>
+
+  <use href="#cb-pin" fill="#F5B301" clip-path="url(#cb-left)"/>
+  <use href="#cb-pin" fill="#16305B" clip-path="url(#cb-right)"/>
+
+  <!-- The window the bus sits in -->
+  <circle cx="256" cy="196" r="118" fill="#FFFFFF"/>
+
+  <!-- Bus, front elevation. Kept to a handful of shapes so nothing muddies at 24px. -->
+  <rect x="186" y="112" width="140" height="150" rx="30" fill="#16305B"/>
+  <rect x="204" y="136" width="104" height="58" rx="12" fill="#FFFFFF"/>
+  <circle cx="212" cy="222" r="13" fill="#FFFFFF"/>
+  <circle cx="300" cy="222" r="13" fill="#FFFFFF"/>
+  <rect x="240" y="214" width="32" height="11" rx="5.5" fill="#FFFFFF"/>
+  <rect x="198" y="256" width="26" height="26" rx="8" fill="#16305B"/>
+  <rect x="288" y="256" width="26" height="26" rx="8" fill="#16305B"/>
   </g>
 </svg>

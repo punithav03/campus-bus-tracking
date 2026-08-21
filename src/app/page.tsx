@@ -4,7 +4,6 @@ import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { StripMap } from '@/components/StripMap';
-import { Compare, type Sample } from '@/components/Compare';
 import { BottomSheet, useMediaQuery } from '@/components/BottomSheet';
 import type { MapRoute } from '@/components/MapView';
 import {
@@ -24,20 +23,19 @@ interface LiveRoute extends RouteSummary {
 }
 
 const POLL_MS = 2000;
-const HISTORY_MAX = 60;
 
 export default function TrackPage() {
   const [campus, setCampus] = useState<Campus | null>(null);
   const [routes, setRoutes] = useState<LiveRoute[]>([]);
   const [routeId, setRouteId] = useState<string | null>(null);
   const [geom, setGeom] = useState<MapRoute | null>(null);
+  // Read inside the retry loop without making it a dependency of the effect.
+  const geomRef = useRef<MapRoute | null>(null);
+  geomRef.current = geom;
   const [state, setState] = useState<(StateView & { replaying?: boolean }) | null>(null);
   const [myStopId, setMyStopId] = useState<string | null>(null);
   const [walkMin, setWalkMin] = useState(5);
-  const [history, setHistory] = useState<Sample[]>([]);
   const [err, setErr] = useState<string | null>(null);
-
-  const historyKey = useRef<string>('');
 
   // Below this width the map takes the whole screen and the content rides over
   // it in a draggable sheet — the layout every transit and ride app uses.
@@ -84,34 +82,81 @@ export default function TrackPage() {
   }, [loadNetwork]);
 
   // ---- route geometry ------------------------------------------------------
+  /**
+   * The route line is the whole map. Fetching it once and giving up was why it
+   * sometimes simply was not there: this runs on a phone that hands off between
+   * Wi-Fi and mobile data, and against a free host that sleeps and takes a few
+   * seconds to wake. A single failed fetch left `geom` null for the rest of the
+   * session — a blank map with no line, no stops and nothing explaining why,
+   * until the student happened to reload.
+   *
+   * So it retries, backing off, and keeps trying rather than failing silently.
+   * The geometry is static, so re-requesting it is cheap and always safe.
+   */
   useEffect(() => {
     if (!routeId) return;
     let dead = false;
-    (async () => {
-      // no-store, not just a no-cache header: the header only helps once the
-      // browser has thrown away the copy it already holds. This bypasses the
-      // HTTP cache outright, so a re-seeded route shows up on the next load
-      // rather than whenever the old entry happens to expire.
-      const r = await fetch(`/api/route/${routeId}`, { cache: 'no-store' });
-      if (!r.ok || dead) return;
-      const j = await r.json();
-      setGeom({
-        id: j.id,
-        color: j.color,
-        shape: j.shape,
-        stops: j.stops.map(
-          (s: { id: string; name: string; lat: number; lng: number; estimated?: boolean }) => ({
-            id: s.id, name: s.name, lat: s.lat, lng: s.lng, estimated: s.estimated,
-          }),
-        ),
-      });
-      // Default to the stop nearest the start of the line the first time.
-      setMyStopId((cur) =>
-        cur && j.stops.some((s: { id: string }) => s.id === cur) ? cur : j.stops[0]?.id ?? null,
-      );
-    })();
-    return () => { dead = true; };
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const attempt = async (n: number) => {
+      if (dead) return;
+      try {
+        // no-store, not just a no-cache header: the header only helps once the
+        // browser has thrown away the copy it already holds. This bypasses the
+        // HTTP cache outright, so a re-seeded route shows up on the next load
+        // rather than whenever the old entry happens to expire.
+        const r = await fetch(`/api/route/${routeId}`, { cache: 'no-store' });
+        if (dead) return;
+        if (!r.ok) throw new Error('route ' + r.status);
+        const j = await r.json();
+        if (dead || !j?.shape?.length) throw new Error('empty route');
+
+        setGeom({
+          id: j.id,
+          color: j.color,
+          shape: j.shape,
+          stops: j.stops.map(
+            (s: { id: string; name: string; lat: number; lng: number; estimated?: boolean }) => ({
+              id: s.id, name: s.name, lat: s.lat, lng: s.lng, estimated: s.estimated,
+            }),
+          ),
+        });
+        // Default to the stop nearest the start of the line the first time.
+        setMyStopId((cur) =>
+          cur && j.stops.some((s: { id: string }) => s.id === cur) ? cur : j.stops[0]?.id ?? null,
+        );
+      } catch {
+        if (dead) return;
+        // 1s, 2s, 4s, 8s, then every 15s forever. A student who leaves the page
+        // open on a bad signal should find it working when they look again,
+        // without having to know that reloading is the fix.
+        const wait = n < 4 ? 1000 * 2 ** n : 15000;
+        timer = setTimeout(() => void attempt(n + 1), wait);
+      }
+    };
+
+    void attempt(0);
+    // Coming back to the tab is the moment a student is looking at it, so it is
+    // the moment worth spending a retry on.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && !geomRef.current) void attempt(0);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      dead = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [routeId]);
+
+  // Pull-to-refresh needs to trigger the same fetch the poller runs. The poller
+  // lives inside an effect (it owns the interval and the dead flag), so it
+  // publishes its tick here rather than being lifted out and duplicated.
+  const tickRef = useRef<(() => Promise<void>) | null>(null);
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadNetwork(), tickRef.current?.() ?? Promise.resolve()]);
+  }, [loadNetwork]);
 
   // ---- live state ----------------------------------------------------------
   useEffect(() => {
@@ -128,6 +173,8 @@ export default function TrackPage() {
         setState(j);
       } catch { /* transient — keep the last good state on screen */ }
     };
+
+    tickRef.current = tick;
 
     // Polling a bus the student cannot see wastes their data and their battery.
     // Stop while the page is hidden, and the moment they come back, fetch at
@@ -158,6 +205,7 @@ export default function TrackPage() {
     return () => {
       dead = true;
       stop();
+      tickRef.current = null;
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('focus', onVisibility);
     };
@@ -168,21 +216,7 @@ export default function TrackPage() {
     [state, myStopId],
   );
 
-  // Reset the comparison chart whenever the question changes.
-  useEffect(() => {
-    const key = `${routeId}:${myStopId}:${state?.trip?.id ?? ''}`;
-    if (key !== historyKey.current) {
-      historyKey.current = key;
-      setHistory([]);
-    }
-  }, [routeId, myStopId, state?.trip?.id]);
 
-  useEffect(() => {
-    if (!myStop || !state?.trip) return;
-    setHistory((h) =>
-      [...h, { profile: myStop.etaS, naive: myStop.etaNaiveS }].slice(-HISTORY_MAX),
-    );
-  }, [myStop?.etaS, myStop?.etaNaiveS, state?.trip?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const route = state?.route;
   const color = route?.color ?? '#f97316';
@@ -285,6 +319,7 @@ export default function TrackPage() {
         {/* ============ content — a draggable sheet on mobile ============ */}
         <BottomSheet
           enabled={mobile}
+          onRefresh={refreshAll}
           peekLabel={
             trip && myStop && !myStop.passed && myStop.etaS != null ? (
               <>
@@ -456,15 +491,6 @@ export default function TrackPage() {
             />
           </div>
 
-          {mobile && (
-            <Compare
-              stop={myStop}
-              now={state?.now ?? Date.now()}
-              color={color}
-              history={history}
-              accuracy={state?.accuracy ?? []}
-            />
-          )}
         </div>
         </BottomSheet>
 
@@ -514,15 +540,6 @@ export default function TrackPage() {
             )}
           </div>
 
-          {!mobile && (
-            <Compare
-              stop={myStop}
-              now={state?.now ?? Date.now()}
-              color={color}
-              history={history}
-              accuracy={state?.accuracy ?? []}
-            />
-          )}
         </div>
       </div>
     </div>

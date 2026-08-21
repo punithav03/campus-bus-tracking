@@ -48,6 +48,14 @@ class Trip {
   id: string;
   routeId: string;
   startedAt: number;              // epoch ms, from the first accepted fix
+
+  /**
+   * Replay feeds real fix timestamps faster than real time, so the engine sees
+   * correct speeds while the device clock outruns the wall clock. These map it
+   * back for display: everything shown to a user is wall-clock time.
+   */
+  clockOrigin = 0;
+  clockScale = 1;
   status: 'running' | 'finished' = 'running';
 
   distAlongM = 0;
@@ -86,6 +94,8 @@ class Trip {
     if (p.spd != null && p.spd > MAX_SPEED_MPS) return false;
 
     const first = this.pingCount === 0;
+    const distBefore = this.distAlongM;
+    const fixBefore = this.lastFixAt;
     const dtS = first ? 1 : Math.max(0.25, (p.t - this.lastFixAt) / 1000);
     if (!first && p.t <= this.lastFixAt) return false; // out of order / duplicate
 
@@ -112,39 +122,83 @@ class Trip {
     }
     this.distAlongM = clamp(this.distAlongM, 0, route.lengthM);
     this.rawSpeedMps = p.spd ?? this.speedMps;
+    const prevDist = first ? this.distAlongM : distBefore;
+    const prevAt = first ? p.t : fixBefore;
     this.lastFixAt = p.t;
     this.lastSeenAt = Date.now();
     this.source = source;
     this.pingCount++;
 
-    this.detectStopEvents(route);
+    this.detectStopEvents(route, prevDist, prevAt);
     this.maybeSnapshot(route);
 
     const el = this.elapsedS;
     if (!this.track.length || el - this.track[this.track.length - 1].t >= 10) {
       this.track.push({ t: Math.round(el), d: Math.round(this.distAlongM) });
     }
-    if (this.distAlongM >= route.lengthM - 30) this.status = 'finished';
+    // A trip is over when the LAST STOP has been served, not when the bus is
+    // merely near the end of the line. Ending it 30 m early meant the final
+    // stationary fixes at the campus were refused as trailing pings, so the
+    // arrival there was never recorded at all.
+    const terminus = route.stops[route.stops.length - 1];
+    const servedTerminus = this.events.some((ev) => ev.seq === terminus.seq);
+    if (servedTerminus || (this.distAlongM >= route.lengthM - 5 && this.speedMps < 0.5)) {
+      this.status = 'finished';
+    }
     return true;
   }
 
-  /** Geofence + near-zero speed = arrival. Leaving the circle = departure. */
-  private detectStopEvents(route: LoadedRoute) {
+  /**
+   * Records the moment the bus served each stop.
+   *
+   * Two detectors, because one is not enough:
+   *
+   *  · HALT — inside the geofence and nearly stopped. This is a real pick-up,
+   *    and the timestamp is the moment it actually stopped, which is what a
+   *    student who missed it wants to know.
+   *
+   *  · CROSSING — the bus went from before the stop to past it. This exists
+   *    because the halt test can only ever see the instants we happen to
+   *    sample. A bus with nobody waiting does not slow down at all, and a
+   *    10-second GPS gap at 60 km/h covers 167 m — wider than the geofence —
+   *    so the bus can be before the stop on one fix and past it on the next
+   *    without ever appearing "at" it. Both cases used to leave the stop
+   *    marked passed with NO time against it, which is exactly the bare word
+   *    "passed" students were seeing instead of a clock time.
+   *
+   * The crossing time is interpolated between the two fixes rather than taken
+   * from the later one, so it stays accurate however coarse the sampling is.
+   */
+  private detectStopEvents(route: LoadedRoute, prevDist: number, prevAt: number) {
     for (const stop of route.stops) {
       const gap = Math.abs(this.distAlongM - stop.distAlongM);
       const inside = gap <= stop.geofenceM;
-      const already = this.events.some((e) => e.seq === stop.seq);
+      const existing = this.events.find((e) => e.seq === stop.seq);
+      if (existing) {
+        // A bus that pulls up just PAST the marker crosses it before it slows,
+        // so the crossing fires first and calls it a drive-through. If it then
+        // halts in the geofence, that was a real pick-up after all — correct
+        // the record rather than leave the flag lying.
+        if (!existing.halted && inside && this.speedMps <= ARRIVE_SPEED_MPS) {
+          existing.halted = true;
+          existing.departedAt = null;
+          this.openStop = { seq: stop.seq, arrivedAt: existing.arrivedAt };
+        }
+        continue;
+      }
 
-      if (inside && !already && this.speedMps <= ARRIVE_SPEED_MPS) {
-        this.events.push({
-          stopId: stop.id,
-          seq: stop.seq,
-          arrivedAt: this.lastFixAt,
-          departedAt: null,
-          delayS: Math.round(this.elapsedS - stop.schedOffsetS),
-        });
+      if (inside && this.speedMps <= ARRIVE_SPEED_MPS) {
+        this.record(stop, this.lastFixAt, true);
         this.openStop = { seq: stop.seq, arrivedAt: this.lastFixAt };
-        this.scoreSnapshots(stop.id, this.lastFixAt);
+        continue;
+      }
+
+      // Did we go past it since the last fix?
+      if (prevDist < stop.distAlongM && this.distAlongM >= stop.distAlongM) {
+        const span = this.distAlongM - prevDist;
+        const f = span > 0 ? (stop.distAlongM - prevDist) / span : 1;
+        const at = Math.round(prevAt + (this.lastFixAt - prevAt) * f);
+        this.record(stop, at, false);
       }
     }
     if (this.openStop) {
@@ -155,6 +209,19 @@ class Trip {
         this.openStop = null;
       }
     }
+  }
+
+  /** One place that appends a stop event, so both detectors agree on shape. */
+  private record(stop: LoadedRoute['stops'][number], at: number, halted: boolean) {
+    this.events.push({
+      stopId: stop.id,
+      seq: stop.seq,
+      arrivedAt: at,
+      departedAt: halted ? null : at, // it never stopped, so it has already left
+      delayS: Math.round((at - this.startedAt) / 1000 - stop.schedOffsetS),
+      halted,
+    });
+    this.scoreSnapshots(stop.id, at);
   }
 
   /**
@@ -365,7 +432,12 @@ class Engine {
   startReplay(routeId: string, points: { t: number; lat: number; lng: number; spd: number; acc: number }[], speed: number) {
     this.stopReplay(routeId);
     const t0 = Date.now();
-    this.start(routeId, t0);
+    const trip = this.start(routeId, t0);
+    // Fix timestamps keep real spacing so speeds are right, but they are fed
+    // `speed` times faster than real time. Record that so the view can present
+    // wall-clock times instead of a device clock running into the future.
+    trip.clockOrigin = t0;
+    trip.clockScale = speed;
 
     // Feed one wall-clock second of fixes every tick, `speed` times faster.
     const TICK_MS = 500;
@@ -386,10 +458,9 @@ class Engine {
         state.idx += 1;
       }
       if (batch.length) this.ingest(routeId, batch, 'replay');
-      const trip = this.trips.get(routeId);
-      if (state.idx >= points.length || trip?.status === 'finished') {
-        this.stopReplay(routeId);
-      }
+      // Run the trace to its end. Stopping at 'finished' cut off the
+      // stationary fixes at the terminus, so the arrival there never fired.
+      if (state.idx >= points.length) this.stopReplay(routeId);
     }, TICK_MS);
 
     this.replays.set(routeId, state);
@@ -426,12 +497,23 @@ class Engine {
           id: s.id, seq: s.seq, name: s.name, lat: s.lat, lng: s.lng,
           distAlongM: s.distAlongM, schedOffsetS: s.schedOffsetS, estimated: s.estimated,
           etaS: null, etaLoS: null, etaHiS: null, etaNaiveS: null,
-          passed: false, arrivedAt: null, delayS: null,
+          passed: false, arrivedAt: null, delayS: null, halted: null,
         })),
         events: [],
         accuracy: [],
       };
     }
+
+    // Engine timestamps are device time. During a replay that clock runs ahead
+    // of the wall clock, so an arrival recorded "at 13:40" would be displayed
+    // while it is still 13:02. Map every absolute time back before it is shown,
+    // and scale durations the same way, so the whole screen agrees with a watch.
+    const wall = (ts: number | null) =>
+      ts == null ? null
+        : trip.clockScale === 1 ? ts
+        : Math.round(trip.clockOrigin + (ts - trip.clockOrigin) / trip.clockScale);
+    const dur = (s: number | null) =>
+      s == null ? null : Math.round(s / trip.clockScale);
 
     const ageS = (now - trip.lastSeenAt) / 1000;
     const confidence: Confidence =
@@ -446,7 +528,7 @@ class Engine {
     const pos = atDistance(route.shape, route.cum, shownDist);
 
     const tripView: TripView = {
-      id: trip.id, routeId, status: trip.status, startedAt: trip.startedAt,
+      id: trip.id, routeId, status: trip.status, startedAt: wall(trip.startedAt)!,
       distAlongM: Math.round(shownDist),
       speedMps: +trip.speedMps.toFixed(2),
       lat: pos.lat, lng: pos.lng,
@@ -470,12 +552,13 @@ class Engine {
       return {
         id: s.id, seq: s.seq, name: s.name, lat: s.lat, lng: s.lng,
         distAlongM: s.distAlongM, schedOffsetS: s.schedOffsetS, estimated: s.estimated,
-        etaS: eta == null ? null : Math.round(eta),
-        etaLoS: eta == null ? null : Math.round(eta * (1 - spread)),
-        etaHiS: eta == null ? null : Math.round(eta * (1 + spread)),
-        etaNaiveS: naive == null ? null : Math.round(naive),
+        etaS: dur(eta),
+        etaLoS: eta == null ? null : dur(eta * (1 - spread)),
+        etaHiS: eta == null ? null : dur(eta * (1 + spread)),
+        etaNaiveS: dur(naive),
         passed: s.distAlongM <= shownDist || !!ev,
-        arrivedAt: ev?.arrivedAt ?? null,
+        arrivedAt: wall(ev?.arrivedAt ?? null),
+        halted: ev ? ev.halted : null,
         delayS: ev?.delayS ?? null,
       };
     });
@@ -492,7 +575,14 @@ class Engine {
       return { model, n: scored.length, maeS };
     });
 
-    return { ...base, trip: tripView, stops, events: trip.events, accuracy };
+    // Events carry timestamps too, and the admin log reads them.
+    const events = trip.events.map((ev) => ({
+      ...ev,
+      arrivedAt: wall(ev.arrivedAt)!,
+      departedAt: wall(ev.departedAt),
+    }));
+
+    return { ...base, trip: tripView, stops, events, accuracy };
   }
 }
 

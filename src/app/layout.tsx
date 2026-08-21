@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { RegisterSW } from '@/components/RegisterSW';
 import { PageTransition } from '@/components/PageTransition';
+import { Splash } from '@/components/Splash';
 import './globals.css';
 
 // Self-hosted at build time — no runtime request to Google, so the app still
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>
         <PageTransition>{children}</PageTransition>
+        <Splash />
         <RegisterSW />
       </body>
     </html>

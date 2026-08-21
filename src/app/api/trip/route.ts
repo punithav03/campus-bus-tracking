@@ -8,11 +8,16 @@ export const dynamic = 'force-dynamic';
 /** Start / end a live trip, or drive one from the recorded reference trace. */
 export async function POST(req: Request) {
   if (!checkPin(req)) return unauthorized();
-  const { routeId, action, speed = 10 } = (await req.json()) as {
-    routeId?: string;
-    action?: 'start' | 'end' | 'replay' | 'stop-replay';
-    speed?: number;
-  };
+  let body: { routeId?: string; action?: string; speed?: number };
+  try {
+    body = await req.json();
+  } catch {
+    // A truncated request from a phone on a flaky signal is a client problem,
+    // not a server fault. 400 says so; a 500 would send us hunting a bug.
+    return NextResponse.json({ error: 'malformed request body' }, { status: 400 });
+  }
+  const { routeId, speed = 10 } = body ?? {};
+  const action = body?.action as 'start' | 'end' | 'replay' | 'stop-replay' | undefined;
 
   if (!routeId || !getRoute(routeId)) {
     return NextResponse.json({ error: 'unknown route' }, { status: 404 });

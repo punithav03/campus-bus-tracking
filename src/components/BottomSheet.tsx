@@ -17,15 +17,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const SNAPS = [0.16, 0.55, 0.94] as const; // fraction of the viewport the sheet covers
 const MAX = SNAPS[SNAPS.length - 1];
 
+/** Pull-to-refresh: how far to drag before it fires, and where it rests while working. */
+const PTR_TRIGGER = 72;
+const PTR_REST = 56;
+/** Even an instant reply holds briefly — a flash that never resolves reads as a glitch. */
+const PTR_MIN_MS = 750;
+
 export function BottomSheet({
   children,
   enabled,
   peekLabel,
+  onRefresh,
 }: {
   children: React.ReactNode;
   /** False on desktop — the sheet becomes a plain container. */
   enabled: boolean;
   peekLabel?: React.ReactNode;
+  /** Pull down at the top of the list to run this. */
+  onRefresh?: () => Promise<void>;
 }) {
   const sheet = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -34,6 +43,15 @@ export function BottomSheet({
 
   const drag = useRef<{ startY: number; startOffset: number; lastY: number; lastT: number; v: number } | null>(null);
   const offset = useRef(0);
+
+  // ---- pull to refresh -----------------------------------------------------
+  const [pull, setPull] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const pullRef = useRef(0);
+  const busy = useRef(false);
+  const refreshRef = useRef(onRefresh);
+  refreshRef.current = onRefresh;
+  pullRef.current = pull;
 
   const vh = () => (typeof window === 'undefined' ? 800 : window.innerHeight);
   const offsetFor = useCallback((i: number) => (MAX - SNAPS[i]) * vh(), []);
@@ -61,6 +79,64 @@ export function BottomSheet({
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, [enabled, snap, apply, offsetFor]);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || !enabled || !onRefresh) return;
+
+    // Native listeners, because React's are passive and a passive listener
+    // cannot preventDefault — without that the browser scroll-chains to the
+    // page behind and the pull never gets off the ground.
+    let startY = 0;
+    let active = false;   // committed to a pull, not a scroll
+
+    const down = (e: TouchEvent) => {
+      if (busy.current || el.scrollTop > 0) return;
+      startY = e.touches[0].clientY;
+      active = true;
+    };
+
+    const move = (e: TouchEvent) => {
+      if (!active || busy.current) return;
+      const dy = e.touches[0].clientY - startY;
+      // Upward, or the list has scrolled — this was a scroll all along.
+      if (dy <= 0 || el.scrollTop > 0) { active = false; setPull(0); return; }
+      e.preventDefault();
+      // Resistance, then heavier resistance past the trigger, so the point it
+      // will fire is something you can feel rather than a number you guess.
+      const raw = dy * 0.55;
+      setPull(raw > PTR_TRIGGER ? PTR_TRIGGER + (raw - PTR_TRIGGER) * 0.35 : raw);
+    };
+
+    const up = async () => {
+      if (!active) return;
+      active = false;
+      if (pullRef.current < PTR_TRIGGER) { setPull(0); return; }
+
+      busy.current = true;
+      setRefreshing(true);
+      setPull(PTR_REST);
+      navigator.vibrate?.(10);
+      const began = performance.now();
+      try { await refreshRef.current?.(); } catch { /* keep the old data */ }
+      const left = PTR_MIN_MS - (performance.now() - began);
+      if (left > 0) await new Promise((r) => setTimeout(r, left));
+      setRefreshing(false);
+      setPull(0);
+      busy.current = false;
+    };
+
+    el.addEventListener('touchstart', down, { passive: true });
+    el.addEventListener('touchmove', move, { passive: false });
+    el.addEventListener('touchend', up);
+    el.addEventListener('touchcancel', up);
+    return () => {
+      el.removeEventListener('touchstart', down);
+      el.removeEventListener('touchmove', move);
+      el.removeEventListener('touchend', up);
+      el.removeEventListener('touchcancel', up);
+    };
+  }, [enabled, onRefresh]);
 
   const settle = useCallback(() => {
     const d = drag.current;
@@ -147,7 +223,38 @@ export function BottomSheet({
         {snap === 0 && peekLabel && <div className="sheet-peek">{peekLabel}</div>}
       </div>
 
-      <div className="sheet-body" ref={scroller}>
+      {enabled && onRefresh && (
+        <div
+          className="sheet-ptr"
+          data-on={refreshing || undefined}
+          style={{ height: pull, marginBottom: -pull, ['--p' as string]: Math.min(1, pull / PTR_TRIGGER) }}
+          aria-hidden
+        >
+          <span className="ptr-road" />
+          <span className="ptr-bus">
+            <svg viewBox="0 0 34 20" width="34" height="20">
+              <rect x="1" y="3" width="30" height="12" rx="3.5" fill="currentColor" />
+              <rect x="21.5" y="5.5" width="7.5" height="5" rx="1.6" fill="rgba(255,255,255,.9)" />
+              <rect x="4" y="5.5" width="14" height="5" rx="1.6" fill="rgba(255,255,255,.55)" />
+              <circle cx="8" cy="16" r="2.6" fill="currentColor" />
+              <circle cx="24" cy="16" r="2.6" fill="currentColor" />
+            </svg>
+          </span>
+        </div>
+      )}
+
+      <div
+        className="sheet-body"
+        ref={scroller}
+        // A transform is applied ONLY while the pull is actually live. A resting
+        // translate3d(0,0,0) would make this a containing block for anything
+        // fixed inside it — cheap to avoid, expensive to debug.
+        style={
+          pull > 0
+            ? { transform: `translate3d(0,${pull}px,0)`, transition: refreshing ? 'transform .38s cubic-bezier(.16,1,.3,1)' : 'none' }
+            : { transform: '', transition: 'transform .38s cubic-bezier(.16,1,.3,1)' }
+        }
+      >
         {children}
       </div>
     </div>

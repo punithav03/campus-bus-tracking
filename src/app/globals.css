@@ -434,14 +434,14 @@ a { color: inherit; }
 .bus-marker { position: relative; display: grid; place-items: center; }
 .bus-glyph {
   position: relative; z-index: 1;
-  width: 32px; height: 32px; border-radius: 11px; display: grid; place-items: center;
+  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
   font-size: 16px; background: var(--c); color: #06090f;
   box-shadow: 0 0 0 3px rgba(7,10,16,.92), 0 6px 18px rgba(0,0,0,.7),
               0 0 22px color-mix(in srgb, var(--c) 45%, transparent);
 }
 .bus-pulse {
   position: absolute; inset: 0; margin: auto;
-  width: 32px; height: 32px; border-radius: 13px; background: var(--c); opacity: .5;
+  width: 32px; height: 32px; border-radius: 50%; background: var(--c); opacity: .5;
   animation: busPulse 2.5s var(--ease-out) infinite;
 }
 @keyframes busPulse {
@@ -1007,3 +1007,217 @@ html, body { max-width: 100%; }
 
 /* Anything freshly arrived from the network fades rather than pops */
 .fade-in { animation: fadeIn .35s var(--ease) backwards; }
+
+/* ======================================================================
+   Launch screen
+
+   The logo must stay solid for the entire flight — only the backdrop fades.
+   Fading the logo mid-flight is what made it vanish and the header mark pop
+   in, which reads as two objects rather than one moving.
+   ====================================================================== */
+
+.splash {
+  position: fixed; inset: 0; z-index: 200;
+  pointer-events: none;
+}
+
+.splash-bg {
+  position: absolute; inset: 0;
+  background: var(--bg);
+  background-image:
+    radial-gradient(760px 420px at 50% 34%, rgba(245,179,1,.10), transparent 70%),
+    radial-gradient(680px 380px at 50% 78%, rgba(22,48,91,.35), transparent 70%);
+  opacity: 1;
+  transition: opacity .5s var(--ease);
+}
+.splash[data-phase="fly"] .splash-bg { opacity: 0; }
+
+.splash-stage {
+  position: absolute; inset: 0;
+  display: grid; place-items: center; align-content: center; gap: 22px;
+}
+
+.splash-logo {
+  width: min(38vw, 168px); aspect-ratio: 1;
+  border-radius: 26%;
+  overflow: hidden;
+  box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06);
+  transform-origin: center center;
+  animation: splashIn .52s cubic-bezier(.2,.9,.3,1.15) backwards;
+  will-change: transform;
+  backface-visibility: hidden;   /* keeps the edges clean while scaling down */
+}
+.splash-logo svg { display: block; width: 100%; height: 100%; }
+@keyframes splashIn {
+  from { opacity: 0; transform: scale(.74); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.splash-word {
+  font-size: 15px; font-weight: 620; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--dim);
+  animation: fadeIn .5s var(--ease) .18s backwards;
+  transition: opacity .22s var(--ease);
+}
+/* The word goes early — it is not part of the object that travels. */
+.splash[data-phase="fly"] .splash-word { opacity: 0; }
+
+/* The destination is empty until the logo has landed on it, then it is simply
+   there — no fade, or the swap becomes visible. */
+html[data-splash="running"] .brand-mark { opacity: 0; }
+
+.brand-mark {
+  background: none !important;
+  box-shadow: none !important;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 26%;
+}
+.brand-mark svg { width: 100%; height: 100%; display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-logo, .splash-word { animation: none; }
+  .splash-logo { transition: none !important; }
+}
+
+/* ======================================================================
+   Softening the mobile split
+   Map above, sheet below, meeting on a hard line reads as two unrelated
+   blocks. A scrim above the sheet and a lighter edge lets the map appear
+   to continue behind it.
+   ====================================================================== */
+
+@media (max-width: 939px) {
+  .sheet[data-enabled="true"] {
+    border-top: 1px solid rgba(255,255,255,.09);
+    border-radius: 26px 26px 0 0;
+    box-shadow:
+      0 -1px 0 rgba(255,255,255,.06) inset,
+      0 -18px 50px rgba(0,0,0,.55);
+  }
+
+  /* A short gradient sitting just above the sheet, so the map fades into it
+     instead of being cut off. */
+  .sheet[data-enabled="true"]::before {
+    content: '';
+    position: absolute; left: 0; right: 0; bottom: 100%; height: 56px;
+    background: linear-gradient(to top, rgba(7,10,16,.55), transparent);
+    pointer-events: none;
+  }
+
+  /* Cards inside the sheet sit on it rather than floating above it — one less
+     layer of boxes stacked on boxes. */
+  .sheet .card {
+    background: rgba(255,255,255,.028);
+    border-color: rgba(255,255,255,.07);
+    box-shadow: none;
+  }
+  .sheet .card-head { border-bottom-color: rgba(255,255,255,.06); }
+
+  .sheet .hero {
+    box-shadow: 0 10px 34px rgba(0,0,0,.4);
+  }
+
+  /* The handle is the thing you grab — make it findable without being loud. */
+  .sheet-bar { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.22); }
+  .sheet-grip:active .sheet-bar { background: rgba(255,255,255,.45); width: 58px; }
+}
+
+/* Route chips are pointless with a single line, and the label is redundant
+   with the header — reclaim the space on every screen size. */
+.chips:has(.chip:only-child) { display: none; }
+
+/* ============================================================================
+   MOTION — direction, arrival, refresh
+   ========================================================================= */
+
+/* --- the bus faces where it is going ------------------------------------ */
+/* The glyph is drawn nose-up, so `rotate(bearing)` is literally true north.
+   The rotation is eased in JS (shortest arc), not here — a CSS transition on
+   transform would take the long way round through 359°→0°. `--lean` is how
+   hard it is turning right now, which is what makes a curve feel like a curve
+   instead of a series of small snaps. */
+.bus-glyph svg {
+  width: 21px; height: 21px; display: block;
+  transform: rotate(var(--bearing, 0deg)) skewX(var(--lean, 0deg));
+  transform-origin: 50% 52%;
+  will-change: transform;
+}
+.bus-glyph { overflow: visible; }
+
+/* --- the moment your stop is passed -------------------------------------- */
+/* One beat: the dot swells and locks in, a ring breathes out from it, and the
+   name flashes back to full strength before settling. It marks the event
+   without ever needing a toast. */
+.strow-ping {
+  position: absolute; inset: 0; margin: auto; width: 10px; height: 10px;
+  border-radius: 50%; pointer-events: none; opacity: 0;
+  box-shadow: 0 0 0 2px var(--c);
+}
+.strow[data-just] .strow-ping { animation: stopPing 1.1s var(--ease-out) 1; }
+.strow[data-just] .strow-node { animation: stopLand .62s cubic-bezier(.2,1.5,.4,1) 1; }
+.strow[data-just] .strow-name {
+  animation: stopName 1.2s var(--ease-out) 1;
+}
+/* The rail below a just-passed stop draws itself in rather than switching on. */
+.strow[data-just] .strow-rail::before {
+  animation: railFill .7s var(--ease-out) 1;
+}
+@keyframes stopPing {
+  0%   { opacity: .85; transform: scale(1); }
+  100% { opacity: 0;   transform: scale(3.4); }
+}
+@keyframes stopLand {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.75); }
+  100% { transform: scale(1); }
+}
+@keyframes stopName {
+  0%, 22% { color: var(--text); }
+  100%    { color: var(--dimmer); }
+}
+@keyframes railFill {
+  from { clip-path: inset(0 0 100% 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+/* --- pull to refresh ------------------------------------------------------ */
+/* Sits behind the list. The list slides down off it, so the bus is revealed
+   rather than flown in — the pull itself is what uncovers it. */
+.sheet-ptr {
+  position: relative; overflow: hidden; flex: none;
+  display: grid; place-items: center;
+}
+.ptr-road {
+  position: absolute; left: 16%; right: 16%; top: 50%; height: 2px;
+  transform: translateY(9px);
+  background: repeating-linear-gradient(90deg,
+    var(--line) 0 9px, transparent 9px 18px);
+  opacity: calc(var(--p, 0) * .9);
+}
+.ptr-bus {
+  position: absolute; top: 50%; left: 16%;
+  color: var(--accent);
+  transform: translate(calc(var(--p, 0) * (68vw - 34px)), -60%);
+  opacity: var(--p, 0);
+}
+.ptr-bus svg { display: block; }
+/* Once it is actually loading the drag no longer drives it — it drives itself. */
+.sheet-ptr[data-on] .ptr-bus {
+  animation: ptrDrive 1.15s cubic-bezier(.5,0,.5,1) infinite;
+  opacity: 1;
+}
+.sheet-ptr[data-on] .ptr-road { opacity: .9; }
+@keyframes ptrDrive {
+  0%   { transform: translate(-46px, -60%); }
+  100% { transform: translate(68vw, -60%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .strow[data-just] .strow-ping,
+  .strow[data-just] .strow-node,
+  .strow[data-just] .strow-name,
+  .strow[data-just] .strow-rail::before,
+  .sheet-ptr[data-on] .ptr-bus { animation: none; }
+  .bus-glyph svg { transform: none; }
+}

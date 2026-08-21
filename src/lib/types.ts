@@ -70,6 +70,12 @@ export interface StopEvent {
   departedAt: number | null;
   /** Actual minus scheduled, in seconds. Negative = early. */
   delayS: number;
+  /**
+   * True if the bus actually halted here; false if it drove straight past.
+   * Worth keeping apart: "picked up at 08:12" and "went by at 08:12" are
+   * different facts to a student who is running late.
+   */
+  halted: boolean;
 }
 
 export interface EtaSnapshot {
@@ -98,6 +104,8 @@ export interface StopView {
   passed: boolean;
   estimated?: boolean;
   arrivedAt: number | null;
+  /** Did the bus stop here, or only go past? Null until it has. */
+  halted: boolean | null;
   delayS: number | null;
 }
 

@@ -24,7 +24,12 @@ export async function GET() {
           : null,
       };
     });
-    return NextResponse.json({ campus: net.campus, routes });
+    // Liveness must never be cached — a stale "no bus running" is worse than
+    // no answer at all, because the student believes it.
+    return NextResponse.json(
+      { campus: net.campus, routes },
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }

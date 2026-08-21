@@ -401,24 +401,13 @@ function RecordPageInner() {
       </div>
 
       <div className="card enter" data-i="2" style={{ marginTop: 18 }}>
-        <div className="card-head"><span className="card-title">Then, on your laptop</span></div>
+        <div className="card-head"><span className="card-title">After the ride</span></div>
         <div className="card-body">
-          <div className="note" style={{ marginBottom: 12 }}>
-            <strong style={{ color: 'var(--text)' }}>Upload</strong> sends the ride
-            to the server — use this if someone else will process it. It needs
-            signal, so do it after the trip, not on the bus. The recording stays
-            on this phone either way, so a failed upload can simply be retried.
-          </div>
           <div className="note">
-            Or export the file and run, on the machine with the project:
-            <div className="mono" style={{ marginTop: 8, color: 'var(--text)' }}>
-              npm run import-trace &lt;file.json&gt; --id route-1 --name &quot;Pichatur — Campus&quot;
-            </div>
-            <div style={{ marginTop: 8 }}>
-              It snaps the trace to a clean road line, finds where the bus actually
-              halted, names those stops from OpenStreetMap, and builds the time
-              profile the ETA model runs on.
-            </div>
+            <strong style={{ color: 'var(--text)' }}>Upload</strong> sends the ride to
+            the college. It needs signal, so do it after the trip rather than on the
+            bus — the recording stays safely on this phone either way, so a failed
+            upload can simply be tried again.
           </div>
         </div>
       </div>

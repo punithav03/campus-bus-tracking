@@ -215,13 +215,10 @@ function DrivePageInner() {
       </div>
 
       <div className="card enter" data-i="1" style={{ marginTop: 18 }}>
-        <div className="card-head"><span className="card-title">Demo · replay a recorded trip</span></div>
+        <div className="card-head"><span className="card-title">Test playback</span></div>
         <div className="card-body" style={{ display: 'grid', gap: 14 }}>
           <div className="note">
-            A bus that runs at 07:05 cannot be demonstrated at 2pm. Replay pushes a
-            real recorded trace through the exact same ingest path, so everything
-            downstream — projection, smoothing, stop detection, ETAs — behaves
-            identically to a live bus.
+            Plays back a previously recorded trip, for testing when no bus is running.
           </div>
           <div className="field">
             <span className="field-label">Speed · {speed}×</span>
