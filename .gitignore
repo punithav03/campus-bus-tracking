@@ -7,6 +7,13 @@ next-env.d.ts
 # — without it the deployed app has no bus route at all.
 data/trips/*.jsonl
 data/recordings/*.json
+# Secrets. This repo is public: an .env.local holding driver PINs would be
+# committed and readable by anyone who finds it. The PIN belongs in the host's
+# environment, and locally in a file that can never be pushed.
+.env
+.env.*
+!.env.example
+
 .DS_Store
 
 .cert/
