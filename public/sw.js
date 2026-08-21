@@ -23,7 +23,7 @@
  *  · /api is never cached. A stale bus position is worse than none.
  */
 
-const CACHE = 'campusbus-v3';
+const CACHE = 'campusbus-v4';
 const PAGE_TIMEOUT_MS = 2500;
 
 self.addEventListener('install', (e) => {
