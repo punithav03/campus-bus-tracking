@@ -45,7 +45,7 @@ function DrivePageInner() {
         setRoutes(j.routes ?? []);
         setRouteId((c) => c || j.routes?.[0]?.id || '');
       })
-      .catch(() => setMsg('Could not load routes — run `npm run seed`.'));
+      .catch(() => setMsg('Could not load the route — check your connection.'));
   }, []);
 
   const flush = useCallback(async () => {

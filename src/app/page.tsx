@@ -36,6 +36,17 @@ export default function TrackPage() {
   const [myStopId, setMyStopId] = useState<string | null>(null);
   const [walkMin, setWalkMin] = useState(5);
   const [err, setErr] = useState<string | null>(null);
+  /**
+   * Whether the first live reading has come back yet.
+   *
+   * Without this the screen said "Not running right now" from the moment it
+   * opened, which is not merely vague — it is wrong, and it is the wrong
+   * answer in the worst direction. A student opening the app while the server
+   * is still waking would be told there is no bus, believe it, and stop
+   * waiting. Not knowing yet and knowing there is no bus are different facts
+   * and have to look different.
+   */
+  const [gotState, setGotState] = useState(false);
 
   // Below this width the map takes the whole screen and the content rides over
   // it in a draggable sheet — the layout every transit and ride app uses.
@@ -65,6 +76,9 @@ export default function TrackPage() {
       const r = await fetch('/api/network', { cache: 'no-store' });
       const j = await r.json();
       if (j.error) { setErr(j.error); return; }
+      // Clear it on success, or one bad poll locks the student on the error
+      // screen for the rest of the session even after the network comes back.
+      setErr(null);
       setCampus(j.campus);
       setRoutes(j.routes);
       setRouteId((cur) => cur ?? j.routes[0]?.id ?? null);
@@ -125,6 +139,10 @@ export default function TrackPage() {
         setMyStopId((cur) =>
           cur && j.stops.some((s: { id: string }) => s.id === cur) ? cur : j.stops[0]?.id ?? null,
         );
+        // The launch screen waits on this. Without it the logo would lift to
+        // reveal "0 stops · 0.0 km" and then have the real content pop in
+        // underneath, which is the flash it exists to prevent.
+        document.documentElement.dataset.ready = '1';
       } catch {
         if (dead) return;
         // 1s, 2s, 4s, 8s, then every 15s forever. A student who leaves the page
@@ -171,6 +189,7 @@ export default function TrackPage() {
         const j = await r.json();
         if (dead || j.error) return;
         setState(j);
+        setGotState(true);
       } catch { /* transient — keep the last good state on screen */ }
     };
 
@@ -278,12 +297,15 @@ export default function TrackPage() {
   };
 
   if (err) {
+    // A student sees this, not a developer. "Failed to fetch" and a shell
+    // command to run are not things they can act on — being offline is, and
+    // it is by far the likeliest reason they are here.
     return (
       <div className="shell">
         <TopBar />
         <div className="card"><div className="empty">
-          <strong style={{ color: 'var(--text)' }}>{err}</strong>
-          <br />Run <span className="mono">npm run seed</span> to build the route network.
+          <strong style={{ color: 'var(--text)' }}>Can’t reach the bus right now</strong>
+          <br />Check your internet connection. This page will keep trying.
         </div></div>
       </div>
     );
@@ -327,7 +349,9 @@ export default function TrackPage() {
                 <span>to {myStop.name}</span>
               </>
             ) : (
-              <span>{trip ? 'Bus has passed your stop' : 'No bus running'}</span>
+              <span>
+                {trip ? 'Bus has passed your stop' : gotState ? 'No bus running' : 'Checking…'}
+              </span>
             )
           }
         >
@@ -399,7 +423,9 @@ export default function TrackPage() {
                 )}
               </>
             ) : (
-              <div className="hero-none">Not running right now</div>
+              <div className="hero-none">
+                {gotState ? 'Not running right now' : 'Checking for the bus…'}
+              </div>
             )}
 
             {trip ? (

@@ -17,7 +17,8 @@
     "villages": "node scripts/find-villages.mjs",
     "diagnose": "node scripts/diagnose-ingest.mjs",
     "seed:reroute": "node scripts/seed.mjs --refresh-shape",
-    "roads": "node scripts/check-roads.mjs"
+    "roads": "node scripts/check-roads.mjs",
+    "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
     "maplibre-gl": "^4.7.1",

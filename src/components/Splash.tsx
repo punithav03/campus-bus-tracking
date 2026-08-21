@@ -1,74 +1,106 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect } from 'react';
 
 /**
- * Launch animation: the icon fills the screen, then shrinks smoothly into the
- * header and becomes the app's mark.
+ * Controls the launch screen. It does NOT render it.
  *
- * It is a FLIP — the logo is measured against the real header mark and animated
- * to exactly that rectangle, so it lands ON it rather than near it.
+ * The screen itself is server-rendered in layout.tsx, and that is the entire
+ * point of this rewrite. When this component rendered its own overlay, the
+ * overlay could only appear after React had hydrated, so an installed app
+ * launched like this:
  *
- * Two things matter for it to read as ONE object moving:
- *   · the logo stays fully opaque for the whole flight. Only the backdrop
- *     fades. Fading the logo out mid-flight makes it vanish and the header mark
- *     appear, which reads as two objects swapping.
- *   · the swap happens AFTER the flight has landed, not before. Unmounting even
- *     a few frames early leaves a visible gap at the destination.
+ *     Android's own splash  ->  a flash of the empty dark shell
+ *     ("0 stops · 0.0 km")  ->  our logo appears  ->  it flies away
+ *
+ * The logo showed up SECOND, after a flash of empty app. That is the stutter.
+ * Now the logo is in the first HTML the browser paints, so it continues
+ * seamlessly out of the OS splash (same background colour, same mark) and
+ * there is nothing to flash in between.
+ *
+ * This component's only job is to end it: wait for the app to actually have
+ * something to show, then fly the logo into the header mark and remove it.
  */
 
-const HOLD_MS = 640;   // let the logo be seen before it moves
-const FLY_MS = 760;    // the flight itself — unhurried, it is the first impression
 const KEY = 'campusbus.splashShown';
+const MIN_HOLD_MS = 520;    // long enough to read as intentional, not a flicker
+/**
+ * The ceiling on waiting for content. Deliberately short: past about a second
+ * and a half a launch screen stops reading as "opening" and starts reading as
+ * "stuck", which is the whole complaint this rewrite exists to fix. If the data
+ * is not there by now, lift anyway — the screen underneath says "Checking for
+ * the bus…" and an honest waiting state beats a frozen logo.
+ */
+const MAX_HOLD_MS = 1600;
+const FLY_MS = 700;
 
 export function Splash() {
-  const [phase, setPhase] = useState<'hidden' | 'hold' | 'fly' | 'done'>('hidden');
-  const logo = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    let seen = false;
-    try { seen = sessionStorage.getItem(KEY) === '1'; } catch { /* private mode */ }
-    if (seen) { setPhase('done'); return; }
-    try { sessionStorage.setItem(KEY, '1'); } catch { /* fine */ }
+    const boot = document.getElementById('boot');
+    if (!boot) return;
 
-    const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    document.documentElement.dataset.splash = 'running';
-    setPhase('hold');
-
+    let done = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
 
-    const finish = () => {
+    const remove = () => {
+      if (done) return;
+      done = true;
       document.documentElement.dataset.splash = 'done';
-      setPhase('done');
+      boot.remove();
+      try { sessionStorage.setItem(KEY, '1'); } catch { /* private mode */ }
     };
 
-    timers.push(setTimeout(() => {
-      if (still) { finish(); return; }
+    // Already seen this session (a client-side navigation, or a reload): the
+    // inline script in <head> has hidden it, so just drop it.
+    if (document.documentElement.dataset.splash === 'skip') { remove(); return; }
 
-      const el = logo.current;
+    document.documentElement.dataset.splash = 'running';
+
+    const fly = () => {
+      if (done) return;
+      const logo = document.getElementById('boot-logo');
       const target = document.querySelector<HTMLElement>('.brand-mark');
-      if (!el || !target) { finish(); return; }
+      const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (still || !logo || !target) { remove(); return; }
 
-      const from = el.getBoundingClientRect();
+      const from = logo.getBoundingClientRect();
       const to = target.getBoundingClientRect();
-      if (!to.width) { finish(); return; }
+      if (!to.width || !from.width) { remove(); return; }
 
       const scale = to.width / from.width;
       const dx = to.left + to.width / 2 - (from.left + from.width / 2);
       const dy = to.top + to.height / 2 - (from.top + from.height / 2);
 
+      boot.dataset.phase = 'fly';
       // No overshoot: a launch mark that bounces on arrival looks unstable.
-      // Slow out of the hold, decisive through the middle, settling at the end.
-      el.style.transition =
-        `transform ${FLY_MS}ms cubic-bezier(.55,.02,.18,1), ` +
-        `box-shadow ${FLY_MS}ms ease-out`;
-      el.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(${scale})`;
-      el.style.boxShadow = 'none';
-      setPhase('fly');
+      logo.style.transition =
+        `transform ${FLY_MS}ms cubic-bezier(.55,.02,.18,1), box-shadow ${FLY_MS}ms ease-out`;
+      logo.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(${scale})`;
+      logo.style.boxShadow = 'none';
 
-      // Swap only once it has actually arrived.
-      timers.push(setTimeout(finish, FLY_MS + 40));
-    }, HOLD_MS));
+      // Swap only once it has actually landed. Unmounting even a few frames
+      // early leaves a visible gap at the destination.
+      timers.push(setTimeout(remove, FLY_MS + 60));
+    };
+
+    // Hold until the app has real content, so what the logo uncovers is the
+    // finished screen rather than "0 stops · 0.0 km" — but never longer than
+    // MAX_HOLD_MS, because a launch screen that waits on the network is
+    // exactly the thing that feels stuck.
+    const started = performance.now();
+    // Only the Track screen loads geometry worth waiting for; /drive, /record
+    // and /admin are ready as soon as they are on screen.
+    const ready = () =>
+      document.documentElement.dataset.ready === '1' || window.location.pathname !== '/';
+
+    const check = () => {
+      if (done) return;
+      const waited = performance.now() - started;
+      if (waited < MIN_HOLD_MS) { timers.push(setTimeout(check, MIN_HOLD_MS - waited)); return; }
+      if (ready() || waited >= MAX_HOLD_MS) { fly(); return; }
+      timers.push(setTimeout(check, 80));
+    };
+    check();
 
     return () => {
       timers.forEach(clearTimeout);
@@ -76,41 +108,5 @@ export function Splash() {
     };
   }, []);
 
-  if (phase === 'done' || phase === 'hidden') return null;
-
-  return (
-    <div className="splash" data-phase={phase} aria-hidden>
-      <div className="splash-bg" />
-      <div className="splash-stage">
-        <div className="splash-logo" ref={logo}>
-          {/* Inlined rather than an <img>: an external file can arrive a frame
-              late, and a launch screen that flickers is worse than none. */}
-          <svg viewBox="0 0 512 512" width="100%" height="100%">
-            <rect width="512" height="512" rx="112" fill="#FFFFFF" />
-            <g transform="translate(256 262) scale(0.78) translate(-256 -256)">
-              <defs>
-                <path
-                  id="sp-pin"
-                  d="M256 26c95 0 172 77 172 172 0 62-50 140-149 236a33 33 0 0 1-46 0C134 338 84 260 84 198 84 103 161 26 256 26z"
-                />
-                <clipPath id="sp-l"><rect x="0" y="0" width="256" height="512" /></clipPath>
-                <clipPath id="sp-r"><rect x="256" y="0" width="256" height="512" /></clipPath>
-              </defs>
-              <use href="#sp-pin" fill="#F5B301" clipPath="url(#sp-l)" />
-              <use href="#sp-pin" fill="#16305B" clipPath="url(#sp-r)" />
-              <circle cx="256" cy="196" r="118" fill="#FFFFFF" />
-              <rect x="186" y="112" width="140" height="150" rx="30" fill="#16305B" />
-              <rect x="204" y="136" width="104" height="58" rx="12" fill="#FFFFFF" />
-              <circle cx="212" cy="222" r="13" fill="#FFFFFF" />
-              <circle cx="300" cy="222" r="13" fill="#FFFFFF" />
-              <rect x="240" y="214" width="32" height="11" rx="5.5" fill="#FFFFFF" />
-              <rect x="198" y="256" width="26" height="26" rx="8" fill="#16305B" />
-              <rect x="288" y="256" width="26" height="26" rx="8" fill="#16305B" />
-            </g>
-          </svg>
-        </div>
-        <div className="splash-word">Campus Bus</div>
-      </div>
-    </div>
-  );
+  return null;
 }
