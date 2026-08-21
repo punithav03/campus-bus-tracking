@@ -5,6 +5,8 @@
 # Notes that matter:
 #   · No PORT is set here on purpose. Render injects one, and `next start`
 #     honours it. Pinning a port is the usual reason a deploy never responds.
+#   · Do NOT set NODE_ENV=production here. npm would then skip
+#     devDependencies, and the build needs typescript and @types to compile.
 #   · Do NOT run server.mjs in production — that is the local host with a
 #     self-signed certificate, and there is no openssl in the container.
 #     Render terminates TLS for you.
@@ -13,12 +15,10 @@ services:
     name: campus-bus
     runtime: node
     plan: free
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/network
     envVars:
-      - key: NODE_ENV
-        value: production
       # Pin the runtime. Next 16 will not build on an older Node, and the
       # platform default can change under you.
       - key: NODE_VERSION
