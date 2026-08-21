@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { TopBar } from '@/components/TopBar';
 import { StripMap } from '@/components/StripMap';
 import { BottomSheet, useMediaQuery } from '@/components/BottomSheet';
@@ -518,6 +519,9 @@ export default function TrackPage() {
           </div>
 
         </div>
+          <Link className="about-link" href="/about">
+            About this app
+          </Link>
         </BottomSheet>
 
         {/* ================= the map owns the screen ================= */}

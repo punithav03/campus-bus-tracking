@@ -1202,3 +1202,61 @@ html, body { max-width: 100%; }
   .strow[data-just] .strow-rail::before,
   .sheet-ptr[data-on] .ptr-bus { animation: none; }
 }
+
+/* ============================================================================
+   About
+   ========================================================================= */
+
+.about-head { text-align: center; padding: 26px 20px 22px; }
+.about-title {
+  font-size: 26px; font-weight: 750; letter-spacing: -.03em; color: var(--text);
+}
+.about-lede { margin-top: 6px; font-size: 14px; color: var(--dim); }
+
+.about-name { font-size: 19px; font-weight: 700; color: var(--text); letter-spacing: -.02em; }
+.about-sub  { margin-top: 5px; font-size: 13.5px; line-height: 1.55; color: var(--dim); }
+
+.about-figs {
+  display: flex; gap: 26px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.about-figs div { display: flex; flex-direction: column; gap: 2px; }
+.about-figs strong { font-size: 22px; font-weight: 750; color: var(--text); letter-spacing: -.03em; }
+.about-figs span { font-size: 11.5px; color: var(--dimmer); }
+
+/* The stop list wraps as prose rather than a column — it is here to be read
+   once, not scanned, and a 16-row list would dominate the page. */
+.about-stops {
+  font-size: 13px; line-height: 1.85; color: var(--dim);
+  padding-top: 14px; border-top: 1px solid var(--line);
+}
+.about-stops i { color: var(--dimmer); font-style: normal; }
+
+.about-p { font-size: 14px; line-height: 1.68; color: var(--dim); margin: 0 0 10px; }
+.about-p:last-child { margin-bottom: 0; }
+.about-p strong { color: var(--text); font-weight: 650; }
+.about-p em { color: var(--text); font-style: normal; }
+
+.about-list { margin: 0; padding-left: 18px; }
+.about-list li {
+  font-size: 14px; line-height: 1.62; color: var(--dim); margin-bottom: 9px;
+}
+.about-list li:last-child { margin-bottom: 0; }
+.about-list li::marker { color: var(--dimmer); }
+
+.about-foot {
+  text-align: center; font-size: 11.5px; color: var(--dimmer);
+  padding: 6px 0 4px;
+}
+
+/* The way in, from the bottom of the stop list. */
+.about-link {
+  display: block; text-align: center; padding: 16px 0 4px;
+  font-size: 12.5px; color: var(--dimmer); text-decoration: none;
+  transition: color var(--fast) var(--ease);
+}
+.about-link:hover { color: var(--text); }
+
+@media (max-width: 720px) {
+  .about-title { font-size: 23px; }
+  .about-figs { gap: 20px; }
+}
