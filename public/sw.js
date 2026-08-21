@@ -23,7 +23,7 @@
  *  · /api is never cached. A stale bus position is worse than none.
  */
 
-const CACHE = 'campusbus-v4';
+const CACHE = 'campusbus-v5';
 const PAGE_TIMEOUT_MS = 2500;
 
 self.addEventListener('install', (e) => {
@@ -39,6 +39,9 @@ self.addEventListener('activate', (e) => {
   );
   self.clients.claim();
 });
+
+/** Ours, or the host's interstitial wearing our domain? See next.config.mjs. */
+const isOurs = (res) => res.headers.get('x-campus-bus') === 'app';
 
 const put = (request, res) => {
   if (res && res.status === 200 && res.type === 'basic') {
@@ -73,9 +76,16 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       try {
         const res = await Promise.race([
-          fetch(request).then((r) => put(request, r)),
+          fetch(request).then((r) => (isOurs(r) ? put(request, r) : r)),
           new Promise((_, reject) => setTimeout(() => reject(new Error('slow')), PAGE_TIMEOUT_MS)),
         ]);
+        // A holding page from the host is not the app. Prefer the real thing
+        // we already have on the device over an interstitial that will not
+        // become one until the server finishes waking.
+        if (!isOurs(res)) {
+          const cached = await caches.match(request) ?? await caches.match('/');
+          if (cached) return cached;
+        }
         return res;
       } catch {
         // Offline, or a host that is still waking up. Either way, open now.
