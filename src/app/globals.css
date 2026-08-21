@@ -1303,7 +1303,9 @@ html, body { max-width: 100%; }
 }
 .markrow-name:focus { outline: none; border-color: var(--accent); }
 .markrow-name::placeholder { color: var(--dimmer); }
-.markrow-t { flex: none; font-size: 11.5px; color: var(--dimmer); }
+.markrow-t { flex: none; font-size: 11.5px; color: var(--dimmer); text-align: right; }
+/* Flagged on a weak signal — worth checking against the logger, not an error. */
+.markrow-warn { display: block; font-size: 10px; color: var(--warn); }
 .markrow-x {
   flex: none; width: 30px; height: 30px; border-radius: 8px;
   background: none; border: none; cursor: pointer;

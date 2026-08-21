@@ -67,6 +67,18 @@ function RecordPageInner() {
 
   const buffer = useRef<Fix[]>([]);
   const last = useRef<Fix | null>(null);
+  /**
+   * The most recent fix regardless of accuracy.
+   *
+   * The accurate one above only accepts fixes under 50 m, because distance
+   * totals go wrong otherwise. Flagging a stop is a different question:
+   * under trees or between hills a phone can sit at 80 m for minutes, and
+   * gating the flag on 50 m meant the rider watched stop after stop go past
+   * with a dead button. A rough position is enormously better than none —
+   * the import merges flags with detected halts anyway, so a loose one still
+   * lands on the right stop.
+   */
+  const lastAny = useRef<Fix | null>(null);
   const dist = useRef(0);
   const count = useRef(0);
   const watchId = useRef<number | null>(null);
@@ -117,6 +129,7 @@ function RecordPageInner() {
     dist.current = 0; count.current = 0;
     setFixCount(0); setMarkerCount(0); setDistanceM(0); setElapsed(0); setPending(0);
     setMarks([]); setHasFix(false);
+    lastAny.current = null;
 
     try {
       const nav = navigator as unknown as {
@@ -141,7 +154,9 @@ function RecordPageInner() {
           const step = haversine(last.current, fix);
           if (step < 400) dist.current += step;
         }
-        if ((fix.acc ?? 999) < 50) { last.current = fix; setHasFix(true); }
+        if ((fix.acc ?? 999) < 50) last.current = fix;
+        lastAny.current = fix;
+        setHasFix(true);
 
         buffer.current.push(fix);
         count.current += 1;
@@ -196,10 +211,10 @@ function RecordPageInner() {
    */
   const mark = useCallback(async () => {
     const s = sessionRef.current;
-    const l = last.current;
+    const l = lastAny.current;
     if (!s || !l) return;
     haptic('select');
-    await addMarker(s.id, { t: Date.now(), lat: l.lat, lng: l.lng, label: '' });
+    await addMarker(s.id, { t: Date.now(), lat: l.lat, lng: l.lng, label: '', acc: l.acc });
     setMarkerCount((m) => m + 1);
     setMarks(await listMarkers(s.id));
     // Confirm it landed without the rider having to read anything.
@@ -337,9 +352,9 @@ function RecordPageInner() {
                   data-flash={justMarked || undefined}
                   onClick={mark}
                   disabled={!hasFix}
-                  title={hasFix ? 'Flag this stop' : 'Waiting for a GPS fix'}
+                  title={hasFix ? 'Flag this stop' : 'The phone has not found its location yet'}
                 >
-                  {justMarked ? '✓ Marked' : hasFix ? '⚑ Mark stop' : '⚑ Waiting for GPS…'}
+                  {justMarked ? '✓ Marked' : hasFix ? '⚑ Mark stop' : '⚑ Finding location…'}
                 </button>
                 <button className="btn" data-danger="true" onClick={stop}>■ Finish</button>
               </>
@@ -373,7 +388,14 @@ function RecordPageInner() {
                     aria-label={'Name for stop ' + (marks.length - i)}
                     onChange={(e) => void nameMark(m.key, e.target.value)}
                   />
-                  <div className="markrow-t num">{fmtClock(m.t)}</div>
+                  <div className="markrow-t num">
+                    {fmtClock(m.t)}
+                    {m.acc != null && m.acc > 50 && (
+                      <span className="markrow-warn" title="Weak signal when this was flagged">
+                        ±{Math.round(m.acc)}m
+                      </span>
+                    )}
+                  </div>
                   <button
                     className="markrow-x"
                     onClick={() => void removeMark(m.key)}

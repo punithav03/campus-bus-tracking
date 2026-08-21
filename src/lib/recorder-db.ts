@@ -25,6 +25,8 @@ export interface Marker {
   lat: number;
   lng: number;
   label: string;
+  /** Metres of GPS uncertainty when the flag was made, if the phone said. */
+  acc?: number | null;
 }
 
 /** A marker as stored, carrying the key needed to rename or remove it. */
@@ -138,7 +140,7 @@ export async function listMarkers(sessionId: string): Promise<StoredMarker[]> {
     const cur = req.result;
     if (!cur) return;
     const v = cur.value as Marker & { sessionId: string };
-    out.push({ key: cur.primaryKey as number, t: v.t, lat: v.lat, lng: v.lng, label: v.label });
+    out.push({ key: cur.primaryKey as number, t: v.t, lat: v.lat, lng: v.lng, label: v.label, acc: v.acc ?? null });
     cur.continue();
   };
   await done(tx);
