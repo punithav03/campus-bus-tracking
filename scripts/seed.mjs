@@ -79,7 +79,7 @@ const ROUTES = [
     // Nindra is the one real exception: the college's list names Nindra X Road
     // on both sides of it, so the bus genuinely detours in and back out.
     via: [
-      { name: 'Nagalapuram',   lat: 13.38771, lng: 79.79634 },
+      { name: 'Nagalapuram',   lat: 13.39080, lng: 79.79369 },
       { name: 'Pichatur',      lat: 13.40046, lng: 79.74125 },
       { name: 'Nindra',        lat: 13.38163, lng: 79.70780 },
       // Kappedu/Koppedu sits on a road parallel to the NH-716A bypass. The bus
@@ -97,7 +97,7 @@ const ROUTES = [
     // and return. The order the college gave is far better evidence than a
     // single node, so it is interpolated instead.
     stops: [
-      { name: 'Nagalapuram Bus Stand', lat: 13.38771, lng: 79.79634 },
+      { name: 'Nagalapuram Bus Stand', lat: 13.39080, lng: 79.79369 },
       { name: 'Gandhi Street' },
       { name: 'VKM Street' },
       { name: 'Indira Nagar' },
