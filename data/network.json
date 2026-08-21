@@ -15,12 +15,12 @@
       "short": "Nagalapuram Line",
       "color": "#f97316",
       "schedStart": "07:05",
-      "lengthM": 39947,
-      "durationS": 4347,
+      "lengthM": 40397,
+      "durationS": 4384,
       "stopCount": 17,
       "firstStop": "Nagalapuram Bus Stand",
       "lastStop": "SVPCET"
     }
   ],
-  "generatedAt": "2026-08-21T06:55:43.999Z"
+  "generatedAt": "2026-08-21T07:22:29.642Z"
 }
