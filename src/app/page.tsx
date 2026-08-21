@@ -77,7 +77,9 @@ export default function TrackPage() {
 
   useEffect(() => { void loadNetwork(); }, [loadNetwork]);
   useEffect(() => {
-    const t = setInterval(loadNetwork, 15000);
+    const t = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadNetwork();
+    }, 15000);
     return () => clearInterval(t);
   }, [loadNetwork]);
 
@@ -116,6 +118,8 @@ export default function TrackPage() {
     if (!routeId) return;
     let dead = false;
 
+    let timer: ReturnType<typeof setInterval> | null = null;
+
     const tick = async () => {
       try {
         const r = await fetch(`/api/state?route=${routeId}`, { cache: 'no-store' });
@@ -125,10 +129,39 @@ export default function TrackPage() {
       } catch { /* transient — keep the last good state on screen */ }
     };
 
-    void tick();
-    const t = setInterval(tick, POLL_MS);
-    return () => { dead = true; clearInterval(t); };
-  }, [routeId]);
+    // Polling a bus the student cannot see wastes their data and their battery.
+    // Stop while the page is hidden, and the moment they come back, fetch at
+    // once rather than making them stare at a stale number until the next tick.
+    const start = () => {
+      if (timer) return;
+      void tick();
+      timer = setInterval(tick, POLL_MS);
+    };
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void loadNetwork();
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onVisibility);
+
+    return () => {
+      dead = true;
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onVisibility);
+    };
+  }, [routeId, loadNetwork]);
 
   const myStop = useMemo(
     () => state?.stops.find((s) => s.id === myStopId) ?? null,
