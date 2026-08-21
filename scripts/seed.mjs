@@ -97,7 +97,7 @@ const ROUTES = [
     // and return. The order the college gave is far better evidence than a
     // single node, so it is interpolated instead.
     stops: [
-      { name: 'Nagalapuram Bus Stand', lat: 13.38618, lng: 79.79687 },
+      { name: 'Nagalapuram',       lat: 13.38618, lng: 79.79687 },
       { name: 'Krishnapuram',      lat: 13.39460, lng: 79.77601 },
       { name: 'Ramagiri',          lat: 13.39727, lng: 79.76614 },
       { name: 'Appambattu' },
