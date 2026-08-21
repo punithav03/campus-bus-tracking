@@ -26,6 +26,33 @@ const OFFLINE = process.argv.includes('--offline');
 // the timetable all move. Once a corridor is right it is FROZEN to disk and
 // reused verbatim. Pass --refresh-shape to deliberately re-route.
 const REFRESH_SHAPE = process.argv.includes('--refresh-shape');
+
+/**
+ * A stop's id, derived from its NAME rather than its position.
+ *
+ * Positional ids (route-1-s0, -s1, …) look tidy and are quietly dangerous: the
+ * id is a promise about which stop you mean, and renumbering breaks that
+ * promise without breaking anything visible. Deleting one stop shifts every id
+ * after it, so a student whose phone had saved "route-1-s2" silently ends up
+ * waiting at the wrong village — the id still resolves, just to a different
+ * place. Removing Indira Nagar did exactly that.
+ *
+ * A name-derived id moves only when the stop itself does.
+ */
+function stopId(routeId, name, taken) {
+  const base = name
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'stop';
+  let id = `${routeId}-${base}`;
+  // Two stops can legitimately share a name — an out-and-back passes the same
+  // junction twice — so disambiguate rather than silently collide.
+  let n = 2;
+  while (taken.has(id)) id = `${routeId}-${base}-${n++}`;
+  taken.add(id);
+  return id;
+}
 const UA = { 'User-Agent': 'CampusBusTracker/0.1 (student project; local use)' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -499,10 +526,11 @@ for (const def of ROUTES) {
     const offBy = def.stops.map((s, i) =>
       s.lat != null ? Math.round(haversine(s, atDistance(shape, cum, at[i]))) : null,
     );
+    const takenIds = new Set();
     const stops = def.stops.map((s, i) => {
       const p = atDistance(shape, cum, at[i]);
       return {
-        id: `${def.id}-s${i}`,
+        id: stopId(def.id, s.name, takenIds),
         seq: i,
         name: s.name,
         lat: +p.lat.toFixed(6),
@@ -551,13 +579,14 @@ for (const def of ROUTES) {
   slots.sort((a, b) => a.d - b.d);
 
   const seen = new Set(anchors.map((a) => a.name));
+  const takenIds = new Set();
   const stops = [];
   for (const slot of slots) {
     const name = slot.anchor ? slot.name : pickName(await addressAt(slot.lat, slot.lng), seen);
     if (!name) continue; // no real locality here — better no stop than a fake one
     seen.add(name);
     stops.push({
-      id: `${def.id}-s${stops.length}`,
+      id: stopId(def.id, name, takenIds),
       seq: stops.length,
       name,
       lat: +slot.lat.toFixed(6),

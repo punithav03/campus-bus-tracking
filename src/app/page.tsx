@@ -24,6 +24,22 @@ interface LiveRoute extends RouteSummary {
 
 const POLL_MS = 2000;
 
+/**
+ * Works out which stop a returning student meant.
+ *
+ * Stop ids used to be positional (route-1-s2). They are derived from the name
+ * now, so every previously saved id fails to match and would otherwise reset
+ * the student to the first stop on the line — a silent change to something
+ * they chose deliberately. An old id still tells us the POSITION they picked,
+ * so translate it once and let it be saved back in the new form.
+ */
+function resolveSavedStop(cur: string | null, stops: { id: string }[]): string | null {
+  if (cur && stops.some((s) => s.id === cur)) return cur;
+  const positional = cur && /-s([0-9]+)$/.exec(cur);
+  if (positional) return stops[Number(positional[1])]?.id ?? stops[0]?.id ?? null;
+  return stops[0]?.id ?? null;
+}
+
 export default function TrackPage() {
   const [campus, setCampus] = useState<Campus | null>(null);
   const [routes, setRoutes] = useState<LiveRoute[]>([]);
@@ -136,9 +152,7 @@ export default function TrackPage() {
           ),
         });
         // Default to the stop nearest the start of the line the first time.
-        setMyStopId((cur) =>
-          cur && j.stops.some((s: { id: string }) => s.id === cur) ? cur : j.stops[0]?.id ?? null,
-        );
+        setMyStopId((cur) => resolveSavedStop(cur, j.stops));
         // The launch screen waits on this. Without it the logo would lift to
         // reveal "0 stops · 0.0 km" and then have the real content pop in
         // underneath, which is the flash it exists to prevent.
