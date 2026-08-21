@@ -121,11 +121,15 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   /** Displayed heading, eased separately so the bus swings rather than snaps. */
   const heading = useRef<number | null>(null);
   const headingTarget = useRef(0);
+  /** Which way the bus body faces: 1 = right, -1 = left. */
+  const facing = useRef(1);
   const fittedFor = useRef<string | null>(null);
   /** Cancels a half-finished draw animation when another draw starts. */
   const drawToken = useRef(0);
   /** Tears down the watcher for a style swap that has been superseded. */
   const styleWatch = useRef<(() => void) | null>(null);
+  /** What is currently drawn, so a redraw only happens when something changed. */
+  const drawnSig = useRef<string | null>(null);
 
   const [styleId, setStyleId] = useState<string>(DEFAULT_STYLE);
   const [ready, setReady] = useState(false);
@@ -299,10 +303,24 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   const drawRoute = useCallback(() => {
     const m = map.current;
     if (!m) return false;
+    const r = routeRef.current;
+    const sig = r
+      ? `${r.id}|${r.shape.length}|${r.color}|${styleRef.current}|${myStopRef.current}`
+      : 'none';
     try {
-      drawNow(m, routeRef.current);
+      // Idempotent, and that is not an optimisation — it is the whole point.
+      // styledata fires continuously while tiles stream in, so redrawing on
+      // every event meant tearing down and rebuilding the route hundreds of
+      // times a second. Each rebuild reset the line to opacity 0 and restarted
+      // every marker's fade-in from zero, so the geometry was always THERE and
+      // never VISIBLE. Measured: 9,639 marker rebuilds in 10 seconds, every
+      // one of them sitting at opacity 0.
+      if (drawnSig.current === sig && m.getLayer('route-line') && m.getSource('route')) return true;
+      drawNow(m, r);
+      drawnSig.current = sig;
       return true;
     } catch {
+      drawnSig.current = null;
       return false; // style not ready to accept layers yet — the reconciler retries
     }
   }, [drawNow]);
@@ -524,15 +542,31 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     if (!busMarker.current) {
       const el = document.createElement('div');
       el.className = 'bus-marker';
+      // A bus seen from the SIDE, kept upright, because that is the only view
+      // that still reads as a bus. The previous version was drawn from above
+      // and rotated to the heading, which turned it into an unrecognisable
+      // blob — and a side-on bus rotated to 270 degrees would simply be upside
+      // down. Direction lives on a separate pointer instead, and the bus body
+      // flips to face the way it is travelling.
       el.innerHTML =
         '<span class="bus-pulse"></span>' +
-        '<span class="bus-glyph"><svg viewBox="0 0 24 24" aria-hidden>' +
-        // Nose at the top: rotating an emoji would just spin a side-on bus.
-        '<path d="M12 2c-3 0-5 1.3-5 3.2v13c0 1 .7 1.8 1.6 1.8h6.8c.9 0 1.6-.8 1.6-1.8v-13C17 3.3 15 2 12 2z" fill="currentColor"/>' +
-        '<rect x="8.4" y="4.6" width="7.2" height="4.2" rx="1.4" fill="rgba(255,255,255,.92)"/>' +
-        '<rect x="8.6" y="10.4" width="6.8" height="1.5" rx=".75" fill="rgba(255,255,255,.55)"/>' +
-        '<circle cx="9.3" cy="18.4" r="1" fill="rgba(255,255,255,.8)"/>' +
-        '<circle cx="14.7" cy="18.4" r="1" fill="rgba(255,255,255,.8)"/>' +
+        '<span class="bus-cone"></span>' +
+        '<span class="bus-glyph"><svg viewBox="0 0 32 20" aria-hidden>' +
+        '<g fill="#16305B">' +
+        '<circle cx="9" cy="15.4" r="2.7"/>' +
+        '<circle cx="23" cy="15.4" r="2.7"/>' +
+        '<rect x="1.5" y="2" width="29" height="12.8" rx="3.4"/>' +
+        '</g>' +
+        // windows: three down the side, then the windscreen at the front
+        '<g fill="#FFFFFF">' +
+        '<rect x="4.2"  y="4.5" width="5.4" height="4.9" rx="1.2"/>' +
+        '<rect x="10.8" y="4.5" width="5.4" height="4.9" rx="1.2"/>' +
+        '<rect x="17.4" y="4.5" width="5.4" height="4.9" rx="1.2"/>' +
+        '<path d="M24.6 4.5h2.4a1.9 1.9 0 0 1 1.9 1.9v3h-4.3z" opacity=".95"/>' +
+        '</g>' +
+        // headlight + door line, the details that sell it at 30px
+        '<rect x="27.6" y="11.2" width="2.4" height="1.9" rx=".9" fill="#F5B301"/>' +
+        '<rect x="13.9" y="10.4" width="1" height="3.4" rx=".5" fill="#FFFFFF" opacity=".45"/>' +
         '</svg></span>';
       busMarker.current = new maplibregl.Marker({ element: el })
         .setLngLat([bus.lng, bus.lat])
@@ -563,12 +597,19 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
 
       // Take the short way round: 350° to 10° is a 20° nudge, not a 340° spin.
       if (heading.current != null) {
-        let delta = ((headingTarget.current - heading.current + 540) % 360) - 180;
+        const delta = ((headingTarget.current - heading.current + 540) % 360) - 180;
         heading.current = (heading.current + delta * 0.14 + 360) % 360;
-        // A slight lean into the turn — how much it is still turning, not where.
-        const lean = Math.max(-9, Math.min(9, delta * 0.5));
-        mk.getElement().style.setProperty('--bearing', heading.current.toFixed(1) + 'deg');
-        mk.getElement().style.setProperty('--lean', lean.toFixed(1) + 'deg');
+
+        // Face the way we are going. The dead bands around due north and due
+        // south are deliberate: without them a bus heading almost exactly north
+        // flips back and forth every time the bearing jitters across 360.
+        const h = heading.current;
+        if (h > 12 && h < 168) facing.current = 1;
+        else if (h > 192 && h < 348) facing.current = -1;
+
+        const el = mk.getElement();
+        el.style.setProperty('--bearing', heading.current.toFixed(1) + 'deg');
+        el.style.setProperty('--flip', String(facing.current));
       }
       if (follow && m && ++ticks % 30 === 0) {
         m.easeTo({ center: [next.lng, next.lat], duration: 900, padding: visiblePadding() });

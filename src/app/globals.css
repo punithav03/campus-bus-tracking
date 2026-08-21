@@ -407,6 +407,7 @@ a { color: inherit; }
 }
 
 .stop-marker {
+  z-index: 1;
   width: 9px; height: 9px; border-radius: 50%;
   background: var(--bg); border: 2px solid var(--c);
   transition: transform var(--med) var(--ease-out);
@@ -423,6 +424,7 @@ a { color: inherit; }
 .stop-marker[data-estimated="true"] { border-style: dashed; opacity: .8; }
 
 .campus-marker {
+  z-index: 2;
   padding: 5px 10px; border-radius: 9px; font-size: 11px; font-weight: 700;
   background: #fff; color: #06090f; white-space: nowrap;
   box-shadow: 0 4px 16px rgba(0,0,0,.55);
@@ -431,13 +433,20 @@ a { color: inherit; }
   background: #0b1018; color: #fff; box-shadow: 0 3px 12px rgba(0,0,0,.3);
 }
 
-.bus-marker { position: relative; display: grid; place-items: center; }
+/* The bus outranks everything else on the map. Markers are plain absolutely
+   positioned siblings, so without this the stop dots — which are rebuilt, and
+   therefore appended last — simply paint over the one thing the student opened
+   the app to see. */
+.bus-marker { position: relative; display: grid; place-items: center; z-index: 5; }
 .bus-glyph {
-  position: relative; z-index: 1;
-  width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center;
-  font-size: 16px; background: var(--c); color: #06090f;
-  box-shadow: 0 0 0 3px rgba(7,10,16,.92), 0 6px 18px rgba(0,0,0,.7),
-              0 0 22px color-mix(in srgb, var(--c) 45%, transparent);
+  position: relative; z-index: 2;
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  /* White plate, navy bus — the same pairing as the app icon, so the marker
+     reads as this app's bus and not as a generic orange dot. */
+  background: #FFFFFF;
+  box-shadow: 0 0 0 3px var(--c), 0 0 0 5px rgba(7,10,16,.55),
+              0 6px 18px rgba(0,0,0,.55),
+              0 0 22px color-mix(in srgb, var(--c) 40%, transparent);
 }
 .bus-pulse {
   position: absolute; inset: 0; margin: auto;
@@ -449,7 +458,8 @@ a { color: inherit; }
   70%  { transform: scale(2.7); opacity: 0; }
   100% { transform: scale(2.7); opacity: 0; }
 }
-.bus-marker[data-ghost="true"] .bus-glyph { opacity: .5; filter: grayscale(.6); }
+.bus-marker[data-ghost="true"] .bus-glyph { opacity: .55; filter: grayscale(.75); }
+.bus-marker[data-ghost="true"] .bus-cone  { opacity: .4; }
 .bus-marker[data-ghost="true"] .bus-pulse { animation: none; opacity: 0; }
 
 /* ---------------------------------------------------------- compare card */
@@ -1132,18 +1142,31 @@ html[data-splash="running"] .brand-mark { opacity: 0; }
    ========================================================================= */
 
 /* --- the bus faces where it is going ------------------------------------ */
-/* The glyph is drawn nose-up, so `rotate(bearing)` is literally true north.
-   The rotation is eased in JS (shortest arc), not here — a CSS transition on
-   transform would take the long way round through 359°→0°. `--lean` is how
-   hard it is turning right now, which is what makes a curve feel like a curve
-   instead of a series of small snaps. */
+/* The bus itself stays UPRIGHT and only flips left/right. Rotating a side-on
+   bus to follow the heading would have it driving upside down for every
+   westbound leg — and this route is westbound nearly all the way. So the
+   heading goes on a separate pointer (.bus-cone) that rotates freely, while
+   the bus stays readable at every angle. Both are eased in JS along the
+   shortest arc; a CSS transition on rotate would take the long way round
+   through 359°→0°. */
 .bus-glyph svg {
-  width: 21px; height: 21px; display: block;
-  transform: rotate(var(--bearing, 0deg)) skewX(var(--lean, 0deg));
-  transform-origin: 50% 52%;
+  width: 23px; height: 23px; display: block;
+  transform: scaleX(var(--flip, 1));
+  transition: transform .32s var(--ease-out);
   will-change: transform;
 }
-.bus-glyph { overflow: visible; }
+
+/* The direction pointer: a small wedge riding just outside the plate. */
+.bus-cone {
+  position: absolute; left: 50%; top: 50%; z-index: 1;
+  width: 0; height: 0; margin: -5px 0 0 -6px;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 9px solid var(--c);
+  transform: rotate(var(--bearing, 0deg)) translateY(-25px);
+  transform-origin: 6px 5px;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,.55));
+}
 
 /* --- the moment your stop is passed -------------------------------------- */
 /* One beat: the dot swells and locks in, a ring breathes out from it, and the
@@ -1214,10 +1237,10 @@ html[data-splash="running"] .brand-mark { opacity: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .bus-glyph svg { transition: none; }
   .strow[data-just] .strow-ping,
   .strow[data-just] .strow-node,
   .strow[data-just] .strow-name,
   .strow[data-just] .strow-rail::before,
   .sheet-ptr[data-on] .ptr-bus { animation: none; }
-  .bus-glyph svg { transform: none; }
 }
