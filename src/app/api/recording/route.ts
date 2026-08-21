@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   }
 
   if (trace.format !== 'campusbus-trace/1' || !Array.isArray(trace.fixes)) {
-    return NextResponse.json({ error: 'not a Campus Bus recording' }, { status: 400 });
+    return NextResponse.json({ error: 'not an SVPCET Bus recording' }, { status: 400 });
   }
   if (trace.fixes.length < 20) {
     return NextResponse.json({ error: 'too few fixes to be a real ride' }, { status: 400 });

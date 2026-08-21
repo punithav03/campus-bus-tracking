@@ -37,8 +37,8 @@ export function TopBar({ subtitle }: { subtitle?: string }) {
           <BrandLogo idPrefix="hb" />
         </div>
         <div className="brand-text">
-          <div className="brand-title">Campus Bus</div>
-          <div className="brand-sub">{subtitle ?? 'SVPCET · Puttur'}</div>
+          <div className="brand-title">SVPCET Bus</div>
+          <div className="brand-sub">{subtitle ?? 'Puttur · live tracking'}</div>
         </div>
       </div>
       <div className="topbar-spacer" />

@@ -24,11 +24,11 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Campus Bus — SVPCET',
+  title: 'SVPCET Bus',
   description:
     'Live college bus tracking for SVPCET, Puttur. Route-projected positions, learned arrival times, and an honest signal indicator.',
   manifest: '/manifest.webmanifest',
-  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'Campus Bus' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'SVPCET Bus' },
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },
@@ -94,7 +94,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             instead of appearing after hydration. */}
         <div id="boot" aria-hidden>
           <div id="boot-logo"><BrandLogo idPrefix="boot" /></div>
-          <div className="boot-word">Campus Bus</div>
+          <div className="boot-word">SVPCET Bus</div>
         </div>
         <PageTransition>{children}</PageTransition>
         <Splash />

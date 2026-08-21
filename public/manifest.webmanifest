@@ -1,6 +1,6 @@
 {
-  "name": "Campus Bus — SVPCET",
-  "short_name": "Campus Bus",
+  "name": "SVPCET Bus",
+  "short_name": "SVPCET Bus",
   "description": "Live college bus tracking and route recording for SVPCET, Puttur.",
   "start_url": "/",
   "scope": "/",

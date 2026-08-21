@@ -289,7 +289,7 @@ export default function TrackPage() {
     haptic('select');
     const eta = myStop?.etaS != null ? `${Math.round(myStop.etaS / 60)} min away` : 'live tracking';
     const res = await share(
-      'Campus Bus — SVPCET',
+      'SVPCET Bus',
       `Bus to ${myStop?.name ?? 'campus'}, ${eta}.`,
     );
     setShareMsg(res === 'copied' ? 'Link copied' : res === 'failed' ? 'Could not share' : null);

@@ -1,4 +1,4 @@
-# Campus Bus
+# SVPCET Bus
 
 Live bus tracking for **Sri Venkatesa Perumal College of Engineering & Technology**, Puttur.
 
