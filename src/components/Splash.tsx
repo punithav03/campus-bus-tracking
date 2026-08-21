@@ -46,7 +46,14 @@ export function Splash() {
       if (done) return;
       done = true;
       document.documentElement.dataset.splash = 'done';
-      boot.remove();
+      // Hidden, NOT removed. #boot is server-rendered by layout.tsx, so React
+      // owns that node; calling .remove() on it left React's tree and the real
+      // DOM disagreeing, and the next client-side navigation threw
+      // "insertBefore: the node before which the new node is to be inserted is
+      // not a child of this node" while it tried to reconcile around a sibling
+      // that no longer existed. It is position:fixed and display:none, so
+      // leaving it in costs nothing.
+      boot.dataset.phase = 'gone';
       try { sessionStorage.setItem(KEY, '1'); } catch { /* private mode */ }
     };
 

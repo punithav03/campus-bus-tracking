@@ -58,6 +58,16 @@ self.addEventListener('fetch', (event) => {
   // Live data must never come from a cache.
   if (url.pathname.startsWith('/api/')) return;
 
+  // Nor may the App Router's own navigation payloads. Clicking a tab does not
+  // fetch a page — it fetches an RSC payload from the SAME url as the page,
+  // distinguished only by a header. The Cache API keys on the url, so caching
+  // these risks handing React a document where it expected a payload, and the
+  // navigation fails while a reload (a real document request) works fine.
+  // Always go to the network for them.
+  if (request.headers.get('RSC') === '1'
+      || request.headers.get('Next-Router-Prefetch') === '1'
+      || url.searchParams.has('_rsc')) return;
+
   // ---- pages: network-first, fall back fast -------------------------------
   if (request.mode === 'navigate') {
     event.respondWith((async () => {

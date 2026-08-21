@@ -66,7 +66,7 @@ const BOOT_CSS = `
 .boot-word{font:620 15px/1 system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;
   color:#8b97a8;transition:opacity .22s ease}
 #boot[data-phase="fly"] .boot-word{opacity:0}
-html[data-splash="skip"] #boot{display:none}
+html[data-splash="skip"] #boot,#boot[data-phase="gone"]{display:none}
 html[data-splash="running"] .brand-mark{opacity:0}
 /* Failsafe. If the JavaScript never arrives, the launch screen must still get
    out of the way rather than holding the app hostage behind a logo. */

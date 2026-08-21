@@ -72,10 +72,11 @@ export function PinGate({ children, title }: { children: React.ReactNode; title:
         <div className="lock-title">Can&apos;t reach the server</div>
         <div className="lock-sub">
           Whether this page is protected could not be confirmed, so it stays locked.
-          Free hosting sleeps when idle — give it a moment.
+          Free hosting sleeps when idle — this keeps retrying on its own, so it
+          should open in a moment.
         </div>
         <button className="btn lock-btn" data-primary="true" onClick={() => void refreshAuth()}>
-          Try again
+          Retry now
         </button>
       </>,
     );

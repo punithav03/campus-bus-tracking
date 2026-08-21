@@ -32,8 +32,12 @@ export async function authState(): Promise<{ required: boolean; ok: boolean }> {
   // No try/catch here on purpose. A failure must reach the caller so it can
   // fail CLOSED — swallowing it here is what let a network blip silently open
   // the admin pages.
+  // Bounded on purpose. Without a timeout a request that never settles leaves
+  // the gate on its loading skeleton indefinitely — no answer, no error, and
+  // nothing to retry, which looks exactly like a frozen page.
   const r = await fetch('/api/auth', {
     cache: 'no-store',
+    signal: AbortSignal.timeout(8000),
     headers: getPin() ? { 'x-campus-pin': getPin() } : {},
   });
   if (!r.ok && r.status !== 401) throw new Error(`auth check failed: ${r.status}`);
