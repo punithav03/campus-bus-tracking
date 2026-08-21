@@ -19,6 +19,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # Pin the runtime. Next 16 will not build on an older Node, and the
+      # platform default can change under you.
+      - key: NODE_VERSION
+        value: 20.19.0
       # Set this in the Render dashboard, not here. Without it, /drive and
       # /admin are open to anyone who finds the URL.
       - key: ADMIN_PIN
