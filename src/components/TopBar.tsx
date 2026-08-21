@@ -56,6 +56,28 @@ export function TopBar({ subtitle }: { subtitle?: string }) {
           </Link>
         ))}
       </nav>
+      {/* An icon, not another word: About is a destination people visit once,
+          and giving it equal weight to Track would be a lie about how often it
+          matters. Kept outside <nav> so the scrolling tab strip can never carry
+          it off the edge of the screen. */}
+      <Link
+        href="/about"
+        // Not prefetched. Next prefetches links by default, so every student
+        // loading Track was pulling down a page almost none of them will open.
+        // On village mobile data that is somebody's balance.
+        prefetch={false}
+        className="navicon"
+        data-active={path === '/about'}
+        aria-label="About this app"
+        title="About this app"
+        onClick={() => haptic('tick')}
+      >
+        <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden>
+          <circle cx="12" cy="12" r="9.25" fill="none" stroke="currentColor" strokeWidth="1.7" />
+          <circle cx="12" cy="7.9" r="1.15" fill="currentColor" />
+          <rect x="11" y="10.6" width="2" height="6.4" rx="1" fill="currentColor" />
+        </svg>
+      </Link>
     </header>
   );
 }
