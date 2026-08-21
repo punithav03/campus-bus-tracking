@@ -8,7 +8,7 @@ import { Compare, type Sample } from '@/components/Compare';
 import { BottomSheet, useMediaQuery } from '@/components/BottomSheet';
 import type { MapRoute } from '@/components/MapView';
 import {
-  CONFIDENCE_COLOR, CONFIDENCE_LABEL, clockAt, fmtAge, fmtDelay, fmtEta, fmtMinNum,
+  CONFIDENCE_COLOR, CONFIDENCE_LABEL, clockAt, fmtAge, fmtClock, fmtDelay, fmtEta,
 } from '@/lib/format';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 import { haptic, setBadge, share } from '@/lib/device';
@@ -35,7 +35,6 @@ export default function TrackPage() {
   const [myStopId, setMyStopId] = useState<string | null>(null);
   const [walkMin, setWalkMin] = useState(5);
   const [history, setHistory] = useState<Sample[]>([]);
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const historyKey = useRef<string>('');
@@ -152,20 +151,6 @@ export default function TrackPage() {
     );
   }, [myStop?.etaS, myStop?.etaNaiveS, state?.trip?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const act = async (action: string, speed?: number) => {
-    if (!routeId) return;
-    setBusy(true);
-    try {
-      await fetch('/api/trip', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ routeId, action, speed }),
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const route = state?.route;
   const color = route?.color ?? '#f97316';
   const trip = state?.trip ?? null;
@@ -193,6 +178,11 @@ export default function TrackPage() {
     if (!trip || !myStop || myStop.passed || !state) return null;
     return state.stops.filter((s) => !s.passed && s.distAlongM <= myStop.distAlongM).length;
   }, [trip, myStop, state]);
+
+  // The last stop is the college. When it has an arrival event the run is
+  // finished, and that time is what the page should lead with.
+  const finalStop = state?.stops[state.stops.length - 1] ?? null;
+  const arrivedAtCampus = finalStop?.arrivedAt ?? null;
 
   // Minutes on the home-screen icon, so you can check without opening anything.
   useEffect(() => {
@@ -310,12 +300,38 @@ export default function TrackPage() {
                   {trip.delayS !== 0 && <> · running {fmtDelay(trip.delayS)}</>}
                 </div>
               </>
+            ) : trip && arrivedAtCampus ? (
+              // Once the bus is at the college, that is the fact worth leading
+              // with — the run is over, and the arrival time is what anyone
+              // asking about this trip actually wants.
+              <>
+                <div className="hero-none">Reached {finalStop?.name ?? 'the college'}</div>
+                <div className="hero-figure" style={{ marginTop: 4 }}>
+                  <span className="hero-num num" style={{ fontSize: 'clamp(44px, 11vw, 62px)' }}>
+                    {fmtClock(arrivedAtCampus)}
+                  </span>
+                </div>
+                {myStop?.arrivedAt && (
+                  <div className="hero-range">
+                    Passed {myStop.name} at{' '}
+                    <strong style={{ color: 'var(--text)' }}>{fmtClock(myStop.arrivedAt)}</strong>
+                  </div>
+                )}
+              </>
             ) : trip && myStop?.passed ? (
-              <div className="hero-none">
-                Bus already passed {myStop.arrivedAt ? `at ${clockAt(myStop.arrivedAt, 0)}` : ''}
-              </div>
+              <>
+                <div className="hero-none">Bus already passed</div>
+                {myStop.arrivedAt && (
+                  <div className="hero-figure" style={{ marginTop: 4 }}>
+                    <span className="hero-num num" style={{ fontSize: 'clamp(44px, 11vw, 62px)' }}>
+                      {fmtClock(myStop.arrivedAt)}
+                    </span>
+                    <span className="hero-unit">at {myStop.name}</span>
+                  </div>
+                )}
+              </>
             ) : (
-              <div className="hero-none">No bus running right now</div>
+              <div className="hero-none">Not running right now</div>
             )}
 
             {trip ? (
@@ -353,28 +369,11 @@ export default function TrackPage() {
               </div>
             )}
 
-            {!trip && (
-              <div className="ctl-row" style={{ marginTop: 16 }}>
-                <button
-                  className="btn"
-                  data-primary="true"
-                  disabled={busy}
-                  onClick={() => act('replay', 12)}
-                >
-                  ▶ Play recorded trip
-                </button>
-                <span style={{ fontSize: 11.5, color: 'var(--dimmer)' }}>
-                  replays a real trace at 12×
-                </span>
-              </div>
-            )}
-            {trip && state?.replaying && (
-              <div className="ctl-row" style={{ marginTop: 16 }}>
-                <button className="btn" data-danger="true" disabled={busy} onClick={() => act('stop-replay')}>
-                  ■ Stop replay
-                </button>
-              </div>
-            )}
+            {/* No operator controls here. This page is public: a student can
+                neither start nor stop a trip, and a button that always returns
+                401 is worse than no button. Replay lives on /drive, behind the
+                PIN. The "replay" badge above stays, because a student watching
+                a replayed bus deserves to know it is not the real one. */}
           </div>
 
           {/* ---- my stop ---- */}

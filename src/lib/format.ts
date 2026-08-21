@@ -12,16 +12,27 @@ export function fmtMinNum(s: number | null | undefined): string {
   return String(Math.round(s / 60));
 }
 
+/**
+ * Every clock time in this app is India Standard Time, stated explicitly rather
+ * than inherited from the viewer's device. A student checking from elsewhere,
+ * or a phone with the wrong zone set, must still see the time the bus actually
+ * passed — not a local translation of it.
+ */
+const IST = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Kolkata',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
 export function clockAt(nowMs: number, addS: number | null | undefined): string {
   if (addS == null) return '—';
-  const d = new Date(nowMs + addS * 1000);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return IST.format(new Date(nowMs + addS * 1000));
 }
 
 export function fmtClock(ms: number | null | undefined): string {
   if (!ms) return '—';
-  const d = new Date(ms);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return IST.format(new Date(ms));
 }
 
 export function fmtAge(s: number): string {
