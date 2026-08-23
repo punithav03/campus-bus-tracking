@@ -123,22 +123,51 @@ const ROUTES = [
     // 79.566, west of Vettalataduku, which would send the bus 20 km backwards
     // and return. The order the college gave is far better evidence than a
     // single node, so it is interpolated instead.
+    // ------------------------------------------------------------------
+    // From Pichatur onward this is no longer a guess. It comes from a ride on
+    // 22 Aug 2026, recorded with a GPS logger for the track and this app for
+    // the stop flags, and every position below is where the bus was actually
+    // seen — most within a couple of metres of the line.
+    //
+    // atM pins a stop to an exact distance along the route, and around Nindra
+    // that is not a nicety. The line doubles back there, so the same tarmac is
+    // both 12 km and 13 km into the trip and "nearest point on the route" has
+    // two right answers. The recording knows which, because it knows the order
+    // the bus drove them in.
+    //
+    // The names are the rider's own, verbatim, including the ones he numbered
+    // because he was not sure — better an honest "Koppedu 2" than a confident
+    // wrong name. The college's boarding-point list will replace them.
+    //
+    // The first four have no recording yet: the ride started at Pichatur, so
+    // they keep their earlier estimated positions and their tilde in the UI.
+    // ------------------------------------------------------------------
     stops: [
       { name: 'Nagalapuram',       lat: 13.38618, lng: 79.79687 },
       { name: 'Krishnapuram',      lat: 13.39460, lng: 79.77601 },
       { name: 'Ramagiri',          lat: 13.39727, lng: 79.76614 },
       { name: 'Appambattu' },
-      { name: 'Pichatur',          lat: 13.40046, lng: 79.74125 },
-      { name: 'Nindra X Road' },
-      { name: 'Nindra',            lat: 13.38163, lng: 79.70780 },
-      { name: 'Nindra X Road (return)' },
-      { name: 'Koppedu',           lat: 13.40945, lng: 79.70398 },
-      { name: 'Palamangalam',      lat: 13.42205, lng: 79.67981 },
-      { name: 'Chittoor Kandriga', lat: 13.40702, lng: 79.65064 },
+      // --- recorded, 22 Aug 2026 ---
+      { name: 'Pichatur',          lat: 13.40048, lng: 79.74015, atM: 6910 },
+      { name: 'Keelapudi',         lat: 13.39577, lng: 79.73727, atM: 7620 },
+      { name: 'Nindra',            lat: 13.39441, lng: 79.73088, atM: 8360 },
+      { name: 'Nindra (2)',        lat: 13.39513, lng: 79.71294, atM: 10710 },
+      { name: 'Nindra stop 2',     lat: 13.38387, lng: 79.70693, atM: 12130 },
+      { name: 'Koppedu 1',         lat: 13.37992, lng: 79.70620, atM: 12930 },
+      { name: 'Koppedu 2',         lat: 13.40293, lng: 79.70561, atM: 16180 },
+      { name: 'Koppedu 3',         lat: 13.41076, lng: 79.70298, atM: 17210 },
+      { name: 'Palamangalam',      lat: 13.41131, lng: 79.69387, atM: 18210 },
+      { name: 'Thumburu',          lat: 13.41074, lng: 79.68220, atM: 19520 },
+      { name: 'Chittoor Kandriga', lat: 13.40939, lng: 79.66685, atM: 21190 },
+      // --- no flags past here; the rider stopped marking at 08:39 ---
       { name: 'Kailasakona' },
       { name: 'Vettalataduku',     lat: 13.41230, lng: 79.61009 },
       { name: 'Narayanavanam',     lat: 13.42515, lng: 79.58754 },
-      { name: 'Puttur',            lat: 13.43814, lng: 79.55221 },
+      // The longest halt of the whole ride, 84 seconds, and we had nothing
+      // here at all. Not a level crossing — the nearest is 877 m away and the
+      // bus does not reach the railway for another two minutes.
+      { name: 'Puttur Bypass',     lat: 13.43112, lng: 79.55738, atM: 34490 },
+      { name: 'Puttur',            lat: 13.43797, lng: 79.55190, atM: 35520 },
       { name: 'SVPCET' },
     ],
   },
@@ -395,9 +424,23 @@ let seedN = 11;
 /** Simulate the reference trip, derive the profile and schedule, and write it. */
 function finish(def, shape, cum, total, stops) {
   process.stdout.write('  reference trip … ');
-  const points = simulateTrip(shape, cum, stops, seedN++);
+
+  // A real ride beats a simulation, and not marginally: measured against the
+  // recording of 22 Aug the simulation ran 15% fast, so every ETA a student
+  // saw was minutes early. Once someone has ridden the route with a logger,
+  // that becomes the reference and the whole schedule derives from it.
+  const ridePath = join(DATA, 'routes', `${def.id}.ride.json`);
+  let points, src;
+  if (existsSync(ridePath)) {
+    const ride = JSON.parse(readFileSync(ridePath, 'utf8'));
+    points = ride.points;
+    src = `recorded ${ride.recordedAt.slice(0, 10)}`;
+  } else {
+    points = simulateTrip(shape, cum, stops, seedN++);
+    src = 'simulated';
+  }
   const profile = buildProfile(points, shape, cum);
-  console.log(`${(points[points.length - 1].t / 60).toFixed(0)} min`);
+  console.log(`${(points[points.length - 1].t / 60).toFixed(0)} min · ${src}`);
 
   const tAt = (d) => {
     for (let i = 1; i < profile.length; i++)
@@ -423,6 +466,7 @@ function finish(def, shape, cum, total, stops) {
     stops,
     profile,
     source: OFFLINE ? 'straight-line' : 'osrm',
+    tripSource: existsSync(join(DATA, 'routes', `${def.id}.ride.json`)) ? 'recorded' : 'simulated',
     // No build timestamp here on purpose: it would make the output differ on
     // every run, which is precisely what we are trying to rule out. The date
     // the corridor was frozen lives in <id>.shape.json, where it is meaningful.
