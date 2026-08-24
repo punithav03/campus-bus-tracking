@@ -135,9 +135,14 @@ const ROUTES = [
     // two right answers. The recording knows which, because it knows the order
     // the bus drove them in.
     //
-    // The names are the rider's own, verbatim, including the ones he numbered
-    // because he was not sure — better an honest "Koppedu 2" than a confident
-    // wrong name. The college's boarding-point list will replace them.
+    // Names come from the college's own boarding register (24 Aug 2026), which
+    // confirmed Keelapudi, Thumburu and Chittoor Kandriga as real boarding
+    // points and corrected one the rider got wrong: what he flagged "Koppedu 1"
+    // sits 151 m from Nindra village and 3.1 km from Koppedu.
+    //
+    // The register names VILLAGES, not individual pickup points, and several
+    // villages have more than one — eight students board at "Nindra", four at
+    // "Koppedu". Those are numbered here in the order the bus reaches them.
     //
     // The first four have no recording yet: the ride started at Pichatur, so
     // they keep their earlier estimated positions and their tilde in the UI.
@@ -150,12 +155,12 @@ const ROUTES = [
       // --- recorded, 22 Aug 2026 ---
       { name: 'Pichatur',          lat: 13.40048, lng: 79.74015, atM: 6910 },
       { name: 'Keelapudi',         lat: 13.39577, lng: 79.73727, atM: 7620 },
-      { name: 'Nindra',            lat: 13.39441, lng: 79.73088, atM: 8360 },
-      { name: 'Nindra (2)',        lat: 13.39513, lng: 79.71294, atM: 10710 },
-      { name: 'Nindra stop 2',     lat: 13.38387, lng: 79.70693, atM: 12130 },
-      { name: 'Koppedu 1',         lat: 13.37992, lng: 79.70620, atM: 12930 },
-      { name: 'Koppedu 2',         lat: 13.40293, lng: 79.70561, atM: 16180 },
-      { name: 'Koppedu 3',         lat: 13.41076, lng: 79.70298, atM: 17210 },
+      { name: 'Nindra X Road',     lat: 13.39441, lng: 79.73088, atM: 8360 },
+      { name: 'Nindra 1',          lat: 13.39513, lng: 79.71294, atM: 10710 },
+      { name: 'Nindra 2',          lat: 13.38387, lng: 79.70693, atM: 12130 },
+      { name: 'Nindra 3',          lat: 13.37992, lng: 79.70620, atM: 12930 },
+      { name: 'Koppedu 1',         lat: 13.40293, lng: 79.70561, atM: 16180 },
+      { name: 'Koppedu 2',         lat: 13.41076, lng: 79.70298, atM: 17210 },
       { name: 'Palamangalam',      lat: 13.41131, lng: 79.69387, atM: 18210 },
       { name: 'Thumburu',          lat: 13.41074, lng: 79.68220, atM: 19520 },
       { name: 'Chittoor Kandriga', lat: 13.40939, lng: 79.66685, atM: 21190 },
