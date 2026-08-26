@@ -170,6 +170,10 @@ const ROUTES = [
       { name: 'Koppedu 2',         lat: 13.41131, lng: 79.69387, atM: 18210 },
       { name: 'Palamangalam',      lat: 13.41074, lng: 79.68220, atM: 19520 },
       { name: 'Thumburu',          lat: 13.40939, lng: 79.66685, atM: 21190 },
+      // Put back after the one-position shift moved its name onto another stop.
+      // The village sits 40 m off the route at 22.96 km — the junction where the
+      // road down from the village meets the highway, which is where the bus stops.
+      { name: 'Chittoor Kandriga', lat: 13.40702, lng: 79.65064, atM: 22960 },
       // --- no flags past here; the rider stopped marking at 08:39 ---
       { name: 'Kailasakona' },
       { name: 'Vettalataduku',     lat: 13.41230, lng: 79.61009 },
