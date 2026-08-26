@@ -144,6 +144,13 @@ const ROUTES = [
     // villages have more than one — eight students board at "Nindra", four at
     // "Koppedu". Those are numbered here in the order the bus reaches them.
     //
+    // Corrected again on 26 Aug: the rider's flags were all one position AHEAD
+    // of the ground — he typed each name as the bus approached the stop, not as
+    // it reached it. So every name from Nindra to Chittoor Kandriga was sitting
+    // on the wrong stop, and one flag was a stop that does not exist. Confirmed
+    // on the map: the stop we were calling Palamangalam has Sannasikandriga
+    // village 166 m away and is in fact Koppedu.
+    //
     // The first four have no recording yet: the ride started at Pichatur, so
     // they keep their earlier estimated positions and their tilde in the UI.
     // ------------------------------------------------------------------
@@ -156,14 +163,13 @@ const ROUTES = [
       { name: 'Pichatur',          lat: 13.40048, lng: 79.74015, atM: 6910 },
       { name: 'Keelapudi',         lat: 13.39577, lng: 79.73727, atM: 7620 },
       { name: 'Nindra X Road',     lat: 13.39441, lng: 79.73088, atM: 8360 },
-      { name: 'Nindra 1',          lat: 13.39513, lng: 79.71294, atM: 10710 },
-      { name: 'Nindra 2',          lat: 13.38387, lng: 79.70693, atM: 12130 },
-      { name: 'Nindra 3',          lat: 13.37992, lng: 79.70620, atM: 12930 },
-      { name: 'Koppedu 1',         lat: 13.40293, lng: 79.70561, atM: 16180 },
-      { name: 'Koppedu 2',         lat: 13.41076, lng: 79.70298, atM: 17210 },
-      { name: 'Palamangalam',      lat: 13.41131, lng: 79.69387, atM: 18210 },
-      { name: 'Thumburu',          lat: 13.41074, lng: 79.68220, atM: 19520 },
-      { name: 'Chittoor Kandriga', lat: 13.40939, lng: 79.66685, atM: 21190 },
+      { name: 'Nindra 1',          lat: 13.38387, lng: 79.70693, atM: 12130 },
+      { name: 'Nindra 2',          lat: 13.37992, lng: 79.70620, atM: 12930 },
+      { name: 'Koppedu Bypass',    lat: 13.40293, lng: 79.70561, atM: 16180 },
+      { name: 'Koppedu 1',         lat: 13.41076, lng: 79.70298, atM: 17210 },
+      { name: 'Koppedu 2',         lat: 13.41131, lng: 79.69387, atM: 18210 },
+      { name: 'Palamangalam',      lat: 13.41074, lng: 79.68220, atM: 19520 },
+      { name: 'Thumburu',          lat: 13.40939, lng: 79.66685, atM: 21190 },
       // --- no flags past here; the rider stopped marking at 08:39 ---
       { name: 'Kailasakona' },
       { name: 'Vettalataduku',     lat: 13.41230, lng: 79.61009 },
