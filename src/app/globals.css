@@ -1313,3 +1313,27 @@ html, body { max-width: 100%; }
   transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
 }
 .markrow-x:hover { color: var(--bad); background: var(--bg-2); }
+
+
+/* ============================================================================
+   Standing clear of the phone's status bar
+
+   In a browser the address bar pushes our header down and nobody notices this.
+   Inside the Android app there is no address bar: the page starts at the very
+   top of the screen, so the nav tabs sat underneath the clock and the battery
+   icon and could not reliably be tapped. Only the Track screen was safe,
+   because its header is fixed and already allowed for the inset.
+
+   env(safe-area-inset-top) is 0 on a desktop and on any phone that does not
+   need it, so this costs nothing where it is not wanted.
+   ========================================================================= */
+
+/* safe-area top inset */
+.shell > .topbar {
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+@media (max-width: 720px) {
+  .shell > .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
+}
+/* The lock screen has no .shell wrapper of its own on some pages. */
+.lock { padding-top: env(safe-area-inset-top); }

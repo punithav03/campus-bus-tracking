@@ -194,12 +194,6 @@ function AdminPageInner() {
             ))}
             <div className="card-body">
               <div className="note">
-                Download a ride, then on the machine with the project run{' '}
-                <span className="mono" style={{ color: 'var(--text)' }}>
-                  npm run import-trace -- &lt;file&gt; --id route-1 --name &quot;Nagalapuram — Campus&quot;
-                </span>{' '}
-                to replace the modelled route with the real one.
-                <br /><br />
                 <strong style={{ color: 'var(--warn)' }}>Download promptly.</strong> On free
                 hosting the server&apos;s disk is wiped on every redeploy, so uploads are a
                 handover point, not storage.

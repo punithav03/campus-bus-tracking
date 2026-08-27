@@ -45,6 +45,23 @@ const config: CapacitorConfig = {
     cleartext: false,
   },
 
+  plugins: {
+    /**
+     * Keep the web view BELOW the status bar.
+     *
+     * Android 15 draws apps edge to edge by default, so the page started at the
+     * very top of the screen and the nav tabs sat underneath the clock and
+     * battery icon — visible, but not reliably tappable. CSS safe-area insets
+     * are the usual answer and they are unreliable here, so this settles it
+     * natively instead: the system simply does not give us that strip.
+     */
+    StatusBar: {
+      overlaysWebView: false,
+      style: 'DARK',
+      backgroundColor: '#080b11',
+    },
+  },
+
   android: {
     // The driver may be on a village road with no signal for minutes. Failing
     // the whole page on one bad request would end the trip.
