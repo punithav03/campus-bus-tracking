@@ -23,7 +23,13 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // SET THIS to the live site. Everything the driver sees is served from here.
 // Override without editing the file:  CAPACITOR_SERVER_URL=https://... npx cap sync
 // ---------------------------------------------------------------------------
-const LIVE_URL = process.env.CAPACITOR_SERVER_URL ?? 'https://campus-bus-8v6y.onrender.com';
+const SITE = process.env.CAPACITOR_SERVER_URL ?? 'https://campus-bus-8v6y.onrender.com';
+
+// Opens straight on the driver's screen, not the students' Track page. This
+// app exists for one person doing one job at 7am, and making him tap through
+// a screen built for someone else is a small tax he would pay every morning.
+// He still reaches Track from the nav if he ever wants it.
+const LIVE_URL = `${SITE}/drive`;
 
 const config: CapacitorConfig = {
   appId: 'org.svpcet.bus',
