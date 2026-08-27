@@ -23,7 +23,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // SET THIS to the live site. Everything the driver sees is served from here.
 // Override without editing the file:  CAPACITOR_SERVER_URL=https://... npx cap sync
 // ---------------------------------------------------------------------------
-const LIVE_URL = process.env.CAPACITOR_SERVER_URL ?? 'https://campus-bus.onrender.com';
+const LIVE_URL = process.env.CAPACITOR_SERVER_URL ?? 'https://campus-bus-8v6y.onrender.com';
 
 const config: CapacitorConfig = {
   appId: 'org.svpcet.bus',

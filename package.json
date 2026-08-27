@@ -31,6 +31,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^7.6.8",
     "@types/node": "^20.16.11",
     "@types/react": "^19.2.18",
