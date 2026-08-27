@@ -21,6 +21,9 @@
     "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
+    "@capacitor-community/background-geolocation": "^1.2.26",
+    "@capacitor/android": "^7.6.8",
+    "@capacitor/core": "^7.6.8",
     "maplibre-gl": "^4.7.1",
     "next": "^16.3.1",
     "qrcode-terminal": "^0.12.0",
@@ -28,6 +31,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.8",
     "@types/node": "^20.16.11",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

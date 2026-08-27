@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { PinGate } from '@/components/PinGate';
 import { authFetch } from '@/lib/client-auth';
+import { startTracking, isNativeApp, type Tracker } from '@/lib/tracker';
 import type { Ping, RouteSummary } from '@/lib/types';
 
 /**
@@ -34,7 +35,8 @@ function DrivePageInner() {
   const [distKm, setDistKm] = useState<number | null>(null);
 
   const queue = useRef<Ping[]>([]);
-  const watchId = useRef<number | null>(null);
+  const tracker = useRef<Tracker | null>(null);
+  const [native, setNative] = useState(false);
   const wakeLock = useRef<{ release: () => Promise<void> } | null>(null);
   const flusher = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -71,8 +73,8 @@ function DrivePageInner() {
   }, [routeId]);
 
   const stop = useCallback(async () => {
-    if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
-    watchId.current = null;
+    await tracker.current?.stop();
+    tracker.current = null;
     if (flusher.current) clearInterval(flusher.current);
     flusher.current = null;
     await flush();
@@ -84,10 +86,6 @@ function DrivePageInner() {
 
   const start = useCallback(async () => {
     if (!routeId) return;
-    if (!('geolocation' in navigator)) {
-      setMsg('This browser has no GPS access.');
-      return;
-    }
     setMsg(null);
     setCaptured(0); setAccepted(0); setBuffered(0);
     queue.current = [];
@@ -98,36 +96,36 @@ function DrivePageInner() {
       body: JSON.stringify({ routeId, action: 'start' }),
     });
 
-    try {
-      // Keeps the screen alive while the phone is mounted and charging.
-      const anyNav = navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ release: () => Promise<void> }> } };
-      if (anyNav.wakeLock) wakeLock.current = await anyNav.wakeLock.request('screen');
-    } catch { /* not fatal — the driver can raise the screen timeout instead */ }
+    // Only needed in a browser, where losing the screen loses the GPS. In the
+    // Android app the foreground service carries on regardless, so holding the
+    // screen awake would just flatten the battery for nothing.
+    if (!isNativeApp()) {
+      try {
+        const anyNav = navigator as unknown as { wakeLock?: { request: (t: string) => Promise<{ release: () => Promise<void> }> } };
+        if (anyNav.wakeLock) wakeLock.current = await anyNav.wakeLock.request('screen');
+      } catch { /* not fatal — the driver can raise the screen timeout instead */ }
+    }
 
-    watchId.current = navigator.geolocation.watchPosition(
-      (pos) => {
+    tracker.current = await startTracking(
+      (fix) => {
         queue.current.push({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          spd: pos.coords.speed ?? null,
-          acc: pos.coords.accuracy ?? null,
-          heading: pos.coords.heading ?? null,
-          t: pos.timestamp || Date.now(),
+          lat: fix.lat, lng: fix.lng, spd: fix.spd,
+          acc: fix.acc, heading: fix.heading, t: fix.t,
         });
         setCaptured((c) => c + 1);
         setBuffered(queue.current.length);
-        setLastAcc(pos.coords.accuracy ?? null);
+        setLastAcc(fix.acc);
       },
-      (e) => setMsg(`GPS error: ${e.message}`),
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 },
+      (m) => setMsg(m),
     );
+    setNative(tracker.current.kind === 'native');
 
     flusher.current = setInterval(() => void flush(), FLUSH_MS);
     setRunning(true);
   }, [routeId, flush]);
 
   useEffect(() => () => {
-    if (watchId.current != null) navigator.geolocation.clearWatch(watchId.current);
+    void tracker.current?.stop();
     if (flusher.current) clearInterval(flusher.current);
   }, []);
 
@@ -177,9 +175,33 @@ function DrivePageInner() {
               <button className="btn" data-danger="true" onClick={stop}>■ End trip</button>
             )}
             <span style={{ fontSize: 12, color: 'var(--dimmer)' }}>
-              {running ? 'Broadcasting — keep this tab open' : 'Uses this phone’s GPS'}
+              {!running ? 'Uses this phone’s GPS'
+                : native ? 'Broadcasting — you can lock the phone'
+                : 'Broadcasting — keep this screen on'}
             </span>
           </div>
+
+          {/* The one instruction that differs between the two, and the driver
+              must not have to guess which he is in. In a browser, locking the
+              phone stops the GPS and the bus vanishes; in the app it does not. */}
+          {running && (
+            <div className="note" style={{ borderLeftColor: native ? 'var(--good)' : 'var(--warn)' }}>
+              {native ? (
+                <>
+                  <strong style={{ color: 'var(--good)' }}>Running in the background.</strong>{' '}
+                  Lock the phone and put it away — tracking continues. A notification
+                  stays in the tray while it runs.
+                </>
+              ) : (
+                <>
+                  <strong style={{ color: 'var(--warn)' }}>Keep this screen on.</strong>{' '}
+                  In a browser the phone stops sharing location the moment the screen
+                  locks. Mount the phone and keep it charging — or install the app,
+                  which keeps running with the screen off.
+                </>
+              )}
+            </div>
+          )}
 
           {msg && <div className="note">{msg}</div>}
         </div>

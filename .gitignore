@@ -17,3 +17,14 @@ data/recordings/*.json
 .DS_Store
 
 .cert/
+
+# Android build output. The android/ project itself IS committed — it is part
+# of the app — but these are generated, machine-specific, or huge.
+android/build/
+android/app/build/
+android/.gradle/
+android/.idea/
+android/captures/
+android/local.properties
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
