@@ -158,6 +158,17 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   const fix = useRef<{ dist: number; speed: number; at: number; live: boolean } | null>(null);
   /** Cumulative metres at each shape vertex — the measuring tape, client side. */
   const cum = useRef<number[]>([]);
+  /**
+   * Set while the page was in the background, cleared by the next real reading.
+   *
+   * Coming back to the app was showing the bus somewhere it had never been.
+   * While the tab is hidden the browser suspends our animation and the page
+   * stops polling, so on return we held a reading minutes old — and the loop
+   * cheerfully advanced the bus by its capped 25 seconds of guesswork before
+   * the first fresh poll landed and yanked it elsewhere. Two wrong positions in
+   * a row. So after an absence we show nothing new until the server has spoken.
+   */
+  const awaitingFresh = useRef(false);
   /** Displayed heading, eased separately so the bus swings rather than snaps. */
   const heading = useRef<number | null>(null);
   const headingTarget = useRef(0);
@@ -575,6 +586,16 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     );
   }, [ready, route, visiblePadding]);
 
+  // Leaving the app and coming back must not teleport the bus. Freeze on
+  // return, poll, and move again once the server has answered.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') awaitingFresh.current = true;
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
   // ---- keep the canvas matched to its container ---------------------------
   // MapLibre only watches the WINDOW for resizes, not its own container. When
   // the map goes full screen the window never changes, so without this the
@@ -645,6 +666,8 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     if (!fix.current || fix.current.dist !== bus.distAlongM || fix.current.live !== bus.live) {
       fix.current = { dist: bus.distAlongM, speed: bus.speedMps, at: Date.now(), live: bus.live };
       if (shownDist.current == null) shownDist.current = bus.distAlongM;
+      // A genuinely fresh reading — we are allowed to move again.
+      awaitingFresh.current = false;
     }
     if (heading.current == null) heading.current = bus.bearing;
     if (!busMarker.current) {
@@ -729,7 +752,8 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
 
       // Where the bus most likely is RIGHT NOW.
       const sinceS = Math.min(PREDICT_CAP_S, (Date.now() - f.at) / 1000);
-      const wanted = f.live ? f.dist + f.speed * sinceS : f.dist;
+      const predict = f.live && !awaitingFresh.current;
+      const wanted = predict ? f.dist + f.speed * sinceS : f.dist;
 
       if (shownDist.current == null) shownDist.current = wanted;
       const gap = wanted - shownDist.current;
@@ -737,9 +761,15 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       // Close the gap smoothly, but never crawl backwards on a small negative
       // correction — a bus that visibly reverses reads as a glitch, and the
       // engine already refuses genuine backward jumps.
-      if (gap > 0.5 || gap < -25) {
+      // A big gap means the bus is genuinely somewhere else — it was hidden
+      // behind another app, or the signal came back after a dead zone. Sliding
+      // the marker over is worse than moving it: for several seconds it draws
+      // the bus on road it was never on. Jump, and be right immediately.
+      if (Math.abs(gap) > 250) {
+        shownDist.current = wanted;
+      } else if (gap > 0.5 || gap < -25) {
         shownDist.current += gap * (1 - Math.pow(1 - CATCH_UP, dt * 60));
-      } else if (f.live) {
+      } else if (predict) {
         shownDist.current += f.speed * dt;   // keep rolling while we are ahead
       }
 
