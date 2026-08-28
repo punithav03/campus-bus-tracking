@@ -1337,3 +1337,11 @@ html, body { max-width: 100%; }
 }
 /* The lock screen has no .shell wrapper of its own on some pages. */
 .lock { padding-top: env(safe-area-inset-top); }
+
+
+/* While we are carrying the bus forward ourselves rather than showing a fresh
+   reading, soften the pulse. Not a warning — the position is still our best
+   honest estimate — just a quieter marker, so a bus we have not heard from in
+   a while does not look as emphatic as one we have. */
+.bus-marker[data-predicted="true"] .bus-pulse { animation-duration: 3.6s; opacity: .3; }
+.bus-marker[data-predicted="true"] .bus-cone  { opacity: .75; }

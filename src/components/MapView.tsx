@@ -46,7 +46,18 @@ export interface MapRoute {
   stops: { id: string; name: string; lat: number; lng: number; estimated?: boolean }[];
 }
 
-export interface MapBus { lat: number; lng: number; bearing: number; ghost: boolean }
+export interface MapBus {
+  lat: number;
+  lng: number;
+  bearing: number;
+  ghost: boolean;
+  /** How far along the route the server last saw it, in metres. */
+  distAlongM: number;
+  /** Its speed at that moment, m/s — what we advance it by between readings. */
+  speedMps: number;
+  /** Only a LIVE bus may be predicted forward. See the animation loop. */
+  live: boolean;
+}
 
 interface Props {
   route: MapRoute | null;
@@ -109,6 +120,31 @@ async function loadStyle(url: string): Promise<string | StyleSpecification> {
   }
 }
 
+/** Where is "6,910 metres along the road"? Walks the tape and interpolates. */
+function pointAt(shape: [number, number][], cum: number[], dist: number) {
+  if (!shape.length || cum.length < 2) return null;
+  const d = Math.max(0, Math.min(cum[cum.length - 1], dist));
+  let lo = 1, hi = cum.length - 1;
+  while (lo < hi) {                       // binary search — 453 points, every frame
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] < d) lo = mid + 1; else hi = mid;
+  }
+  const span = cum[lo] - cum[lo - 1] || 1;
+  const t = (d - cum[lo - 1]) / span;
+  const [aLng, aLat] = shape[lo - 1];
+  const [bLng, bLat] = shape[lo];
+  const lat = aLat + t * (bLat - aLat);
+  const lng = aLng + t * (bLng - aLng);
+  // Heading from the segment itself: the road knows which way the bus points
+  // far better than two noisy GPS fixes do.
+  const y = Math.sin((bLng - aLng) * Math.PI / 180) * Math.cos(bLat * Math.PI / 180);
+  const x = Math.cos(aLat * Math.PI / 180) * Math.sin(bLat * Math.PI / 180) -
+            Math.sin(aLat * Math.PI / 180) * Math.cos(bLat * Math.PI / 180) *
+            Math.cos((bLng - aLng) * Math.PI / 180);
+  const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  return { lat, lng, bearing };
+}
+
 export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   const holder = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
@@ -116,8 +152,12 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   const stopMarkers = useRef<maplibregl.Marker[]>([]);
   const campusMarker = useRef<maplibregl.Marker | null>(null);
 
-  const shown = useRef<{ lng: number; lat: number } | null>(null);
-  const target = useRef<{ lng: number; lat: number } | null>(null);
+  /** Metres along the route we are DRAWING the bus at. */
+  const shownDist = useRef<number | null>(null);
+  /** The last reading from the server, and when it landed. */
+  const fix = useRef<{ dist: number; speed: number; at: number; live: boolean } | null>(null);
+  /** Cumulative metres at each shape vertex — the measuring tape, client side. */
+  const cum = useRef<number[]>([]);
   /** Displayed heading, eased separately so the bus swings rather than snaps. */
   const heading = useRef<number | null>(null);
   const headingTarget = useRef(0);
@@ -135,6 +175,10 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   const [ready, setReady] = useState(false);
   const [offline, setOffline] = useState(false);
   const [follow, setFollow] = useState(false);
+  /** Set once the student pans or zooms — after that the camera is theirs. */
+  const grabbed = useRef(false);
+  /** So we only snap to the bus the first time one appears. */
+  const framedBus = useRef(false);
   const [expanded, setExpanded] = useState(false);
 
   /**
@@ -159,6 +203,25 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   // identity. The /api/network poll hands back a fresh `campus` object every 15
   // seconds; if that leaked into a dependency list the map would be destroyed
   // and rebuilt on every poll, which looks exactly like a map that never loads.
+  // The same measuring tape the server uses, rebuilt here so the marker can be
+  // placed at an arbitrary distance along the road rather than at a raw point.
+  useEffect(() => {
+    if (!route) { cum.current = []; return; }
+    const R = 6371008.8, rad = (d: number) => (d * Math.PI) / 180;
+    const out = [0];
+    for (let i = 1; i < route.shape.length; i++) {
+      const [aLng, aLat] = route.shape[i - 1];
+      const [bLng, bLat] = route.shape[i];
+      const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+      const h = Math.sin(dLat / 2) ** 2 +
+        Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+      out.push(out[i - 1] + 2 * R * Math.asin(Math.sqrt(h)));
+    }
+    cum.current = out;
+  }, [route]);
+
+  const busRef = useRef(bus);
+  busRef.current = bus;
   const routeRef = useRef(route);
   const myStopRef = useRef(myStopId);
   const campusRef = useRef(campus);
@@ -458,10 +521,51 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     if (m && ready) paintGradient(m);
   }, [ready, progress, styleId, paintGradient]);
 
+  /**
+   * Frame the BUS when there is one, not the whole line.
+   *
+   * Fitting all 40 km is right when nothing is running — it shows a student the
+   * shape of the route. But with a bus on the road it is the wrong picture
+   * entirely: at that scale the entire journey is 700 pixels wide, so a bus
+   * doing 30 km/h crosses well under a pixel a second and looks parked. The
+   * motion was there all along; nobody could see it.
+   *
+   * So the first time a bus appears we go to it and follow, the way every ride
+   * app does. The moment the student pans or zooms, the camera becomes theirs
+   * and we stop moving it — being dragged back to the bus while trying to look
+   * at your own stop is worse than never following at all.
+   */
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready || !bus || framedBus.current || grabbed.current) return;
+    framedBus.current = true;
+    setFollow(true);
+    m.easeTo({
+      center: [bus.lng, bus.lat],
+      zoom: Math.max(m.getZoom(), 14.5),
+      duration: 1400,
+      padding: visiblePadding(),
+    });
+  }, [ready, bus, visiblePadding]);
+
+  // Once they touch the map it is theirs. Only user gestures count — our own
+  // easeTo calls must not switch following off.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    const mine = () => { grabbed.current = true; setFollow(false); };
+    m.on('dragstart', mine);
+    m.on('zoomstart', (e: { originalEvent?: unknown }) => { if (e.originalEvent) mine(); });
+    return () => { m.off('dragstart', mine); };
+  }, [ready]);
+
   // ---- fit to the route ----------------------------------------------------
   useEffect(() => {
     const m = map.current;
     if (!m || !ready || !route || fittedFor.current === route.id) return;
+    // A bus outranks the overview: if one is already running when the map opens,
+    // the effect above frames it instead.
+    if (busRef.current) { fittedFor.current = route.id; return; }
     fittedFor.current = route.id;
     const lngs = route.shape.map((c) => c[0]);
     const lats = route.shape.map((c) => c[1]);
@@ -531,13 +635,17 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     if (!bus) {
       busMarker.current?.remove();
       busMarker.current = null;
-      shown.current = null;
-      target.current = null;
+      shownDist.current = null;
+      fix.current = null;
       return;
     }
 
-    target.current = { lng: bus.lng, lat: bus.lat };
-    headingTarget.current = bus.bearing;
+    // Only record a genuinely new reading, or the "time since" clock resets on
+    // every render and the bus never gets to move between polls.
+    if (!fix.current || fix.current.dist !== bus.distAlongM || fix.current.live !== bus.live) {
+      fix.current = { dist: bus.distAlongM, speed: bus.speedMps, at: Date.now(), live: bus.live };
+      if (shownDist.current == null) shownDist.current = bus.distAlongM;
+    }
     if (heading.current == null) heading.current = bus.bearing;
     if (!busMarker.current) {
       const el = document.createElement('div');
@@ -571,48 +679,105 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       busMarker.current = new maplibregl.Marker({ element: el })
         .setLngLat([bus.lng, bus.lat])
         .addTo(m);
-      shown.current = { lng: bus.lng, lat: bus.lat };
+      // The animation loop takes over from here and works in metres along the
+      // route, not raw points, so there is no separate position to seed.
     }
     const el = busMarker.current.getElement();
     el.style.setProperty('--c', route?.color ?? '#f97316');
     el.dataset.ghost = String(bus.ghost);
   }, [ready, bus, route?.color, styleId]);
 
-  // Ease the marker toward each new fix, and optionally keep the camera on it.
+  /**
+   * Keeps the bus MOVING, not stepping.
+   *
+   * The server is polled every couple of seconds. Easing straight to each new
+   * point meant the marker darted to the reading in a third of a second and
+   * then sat perfectly still until the next one — move, freeze, move, freeze.
+   * That is what made it look dead.
+   *
+   * So between readings we carry the bus forward ourselves, along the route, at
+   * the speed it was last doing. We can do this honestly because we know the
+   * road: the bus is not drifting across a field toward a guessed point, it is
+   * following the same tarmac it is actually on. Each new reading then corrects
+   * the guess rather than replacing it, so the motion never jumps.
+   *
+   * Two limits, and both are about not lying:
+   *   · prediction stops the moment the signal is no longer live. A bus we have
+   *     lost must sit still, not keep gliding confidently down the road.
+   *   · it never runs more than PREDICT_CAP_S ahead of a real reading. Past
+   *     that we are inventing a journey, and a frozen marker is the honest
+   *     picture.
+   */
   useEffect(() => {
     let raf = 0;
     let ticks = 0;
+    let last = performance.now();
+
+    const PREDICT_CAP_S = 25;   // stop guessing beyond this
+    const CATCH_UP = 0.06;      // how fast the drawn bus closes on the truth
+
     const step = () => {
       raf = requestAnimationFrame(step);
       const mk = busMarker.current;
       const m = map.current;
-      if (!mk || !target.current) return;
-      const cur = shown.current ?? target.current;
-      const next = {
-        lng: cur.lng + (target.current.lng - cur.lng) * 0.12,
-        lat: cur.lat + (target.current.lat - cur.lat) * 0.12,
-      };
-      shown.current = next;
-      mk.setLngLat([next.lng, next.lat]);
+      const r = routeRef.current;
+      const f = fix.current;
+      const now = performance.now();
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      if (!mk || !f || !r || cum.current.length < 2) return;
 
-      // Take the short way round: 350° to 10° is a 20° nudge, not a 340° spin.
-      if (heading.current != null) {
-        const delta = ((headingTarget.current - heading.current + 540) % 360) - 180;
-        heading.current = (heading.current + delta * 0.14 + 360) % 360;
+      // Where the bus most likely is RIGHT NOW.
+      const sinceS = Math.min(PREDICT_CAP_S, (Date.now() - f.at) / 1000);
+      const wanted = f.live ? f.dist + f.speed * sinceS : f.dist;
 
-        // Face the way we are going. The dead bands around due north and due
-        // south are deliberate: without them a bus heading almost exactly north
-        // flips back and forth every time the bearing jitters across 360.
-        const h = heading.current;
-        if (h > 12 && h < 168) facing.current = 1;
-        else if (h > 192 && h < 348) facing.current = -1;
+      if (shownDist.current == null) shownDist.current = wanted;
+      const gap = wanted - shownDist.current;
 
-        const el = mk.getElement();
-        el.style.setProperty('--bearing', heading.current.toFixed(1) + 'deg');
-        el.style.setProperty('--flip', String(facing.current));
+      // Close the gap smoothly, but never crawl backwards on a small negative
+      // correction — a bus that visibly reverses reads as a glitch, and the
+      // engine already refuses genuine backward jumps.
+      if (gap > 0.5 || gap < -25) {
+        shownDist.current += gap * (1 - Math.pow(1 - CATCH_UP, dt * 60));
+      } else if (f.live) {
+        shownDist.current += f.speed * dt;   // keep rolling while we are ahead
       }
-      if (follow && m && ++ticks % 30 === 0) {
-        m.easeTo({ center: [next.lng, next.lat], duration: 900, padding: visiblePadding() });
+
+      const p = pointAt(r.shape, cum.current, shownDist.current);
+      if (!p) return;
+      mk.setLngLat([p.lng, p.lat]);
+
+      // Heading comes from the ROAD, which is steadier than differencing two
+      // noisy fixes, and it is what the bus is physically doing anyway.
+      if (heading.current == null) heading.current = p.bearing;
+      const delta = ((p.bearing - heading.current + 540) % 360) - 180;
+      heading.current = (heading.current + delta * 0.12 + 360) % 360;
+
+      // Face the way we are going. The dead bands around due north and due
+      // south are deliberate: without them a bus heading almost exactly north
+      // flips back and forth every time the bearing jitters across 360.
+      const h = heading.current;
+      if (h > 12 && h < 168) facing.current = 1;
+      else if (h > 192 && h < 348) facing.current = -1;
+
+      const el = mk.getElement();
+      el.style.setProperty('--bearing', heading.current.toFixed(1) + 'deg');
+      el.style.setProperty('--flip', String(facing.current));
+      // Lets the CSS calm the marker down when we are no longer sure.
+      el.dataset.predicted = !f.live || sinceS > 6 ? 'true' : 'false';
+
+      // Move the camera every frame rather than easing to it twice a second.
+      // Our position is already smooth, so the map glides with the bus instead
+      // of lurching after it — and easeTo firing on a timer fought the marker's
+      // own animation, which is a large part of why this felt jerky.
+      // Not while the map is already animating. setCenter cancels an easeTo in
+      // flight, and that silently ate the zoom-in when the bus first appeared —
+      // the camera dutifully followed, at a zoom where the whole 40 km fits the
+      // screen and the bus crawls one pixel a second. It looked exactly like
+      // the bug this was meant to fix.
+      if (follow && m && !grabbed.current && !m.isEasing()) {
+        ticks++;
+        m.setCenter([p.lng, p.lat]);
       }
     };
     raf = requestAnimationFrame(step);

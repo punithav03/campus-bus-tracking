@@ -548,7 +548,17 @@ export default function TrackPage() {
             </div>
             <MapView
               route={geom}
-              bus={trip ? { lat: trip.lat, lng: trip.lng, bearing: trip.bearing, ghost: conf === 'estimated' } : null}
+              bus={trip ? {
+                lat: trip.lat, lng: trip.lng, bearing: trip.bearing,
+                ghost: conf === 'estimated',
+                // The map carries the bus forward along the route between
+                // polls, so it needs the distance and speed, not just a point.
+                distAlongM: trip.distAlongM,
+                speedMps: trip.speedMps,
+                // Predict only while we genuinely have the bus. A lost bus must
+                // sit still rather than glide confidently down the road.
+                live: conf === 'live' || conf === 'recent',
+              } : null}
               myStopId={myStopId}
               campus={campus ? { lat: campus.lat, lng: campus.lng, name: campus.name } : null}
               progress={trip?.progress ?? 0}
