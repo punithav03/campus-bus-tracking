@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { engine } from '@/lib/engine';
 import { requireRoute } from '@/lib/guard';
-import { engineKey } from '@/lib/network';
-import { directionNow } from '@/lib/trip-store';
 import { ensureLive } from '@/lib/live';
 
 export const dynamic = 'force-dynamic';
@@ -20,17 +18,11 @@ export async function GET(req: Request) {
   if (!g.ok) return g.res;
   await ensureLive();
 
-  // Morning or afternoon decides which bus "my route" means. The student
-  // asking at 16:50 wants the one going home, and it is a different trip on
-  // a different line through the same villages.
-  const direction = directionNow();
-  const key = engineKey(g.routeId!, direction);
-
-  const view = engine.view(key) ?? engine.view(g.routeId!);
+  const view = engine.view(g.routeId!);
   if (!view) return NextResponse.json({ error: 'unknown route' }, { status: 404 });
 
   return NextResponse.json(
-    { ...view, direction, replaying: engine.isReplaying(key) },
+    { ...view, replaying: engine.isReplaying(g.routeId!) },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

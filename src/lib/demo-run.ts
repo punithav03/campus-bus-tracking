@@ -138,10 +138,8 @@ export function syntheticTrace(route: LoadedRoute): TracePoint[] {
  * a synthetic drive down the same road.
  */
 export function demoTrace(routeKey: string): { points: TracePoint[]; source: 'recorded' | 'synthetic' } | null {
-  const base = routeKey.replace(/@in$/, '');
-  const recorded = getReferenceTrip(base);
-  // Only the forward route has a recording; the way home has to be generated.
-  if (recorded?.points?.length && !routeKey.endsWith('@in')) {
+  const recorded = getReferenceTrip(routeKey);
+  if (recorded?.points?.length) {
     return { points: recorded.points, source: 'recorded' };
   }
   const route = getRoute(routeKey);

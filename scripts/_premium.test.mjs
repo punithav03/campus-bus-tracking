@@ -1,6 +1,6 @@
 /**
- * Checks for the features added on top of the core app: persisted trips, the
- * return journey, push subscriptions and "I am at the stop".
+ * Checks for the features added on top of the core app: persisted trips,
+ * push subscriptions and "I am at the stop".
  *
  *   node scripts/_premium.test.mjs
  */
@@ -37,28 +37,12 @@ const stu = await login('23G01A05J0');     // route-1
 const drv = await login('9550085083');     // route-1 driver
 const adm = await login('admin', process.env.ADMIN_PASSWORD ?? 'svpcet2026');
 
-console.log('\n── RETURN JOURNEY ──');
-const out = await get('/api/route/route-1', adm);
-const back = await get('/api/route/route-1%40in', adm);
-ok('inbound route exists', back.status === 200);
-ok('inbound starts at the college',
-  back.body.stops?.[0]?.name === 'SVPCET', back.body.stops?.[0]?.name);
-ok('inbound ends at the village',
-  back.body.stops?.at(-1)?.name === out.body.stops?.[0]?.name);
-ok('same length both ways', back.body.lengthM === out.body.lengthM);
-ok('inbound starts in the afternoon', back.body.schedStart >= '12:00', back.body.schedStart);
-ok('inbound stop distances increase',
-  (back.body.stops ?? []).every((s, i, a) => i === 0 || s.distAlongM > a[i - 1].distAlongM));
-ok('inbound times increase',
-  (back.body.stops ?? []).every((s, i, a) => i === 0 || s.schedOffsetS >= a[i - 1].schedOffsetS));
-ok('student cannot read the inbound of another route',
-  (await get('/api/route/route-3%40in', stu)).status === 403);
 
 console.log('\n── TRIP PERSISTENCE ──');
 const started = await send('POST', '/api/trip', { action: 'start' }, drv);
 ok('trip starts', started.status === 200 && started.body.tripId > 0, JSON.stringify(started.body));
 const tripId = started.body.tripId;
-ok('direction recorded', ['outbound', 'inbound'].includes(started.body.direction));
+ok('direction recorded', started.body.direction === 'outbound', started.body.direction);
 const again = await send('POST', '/api/trip', { action: 'start' }, drv);
 ok('starting twice reuses the same trip', again.body.tripId === tripId,
   `${tripId} vs ${again.body.tripId}`);

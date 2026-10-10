@@ -137,7 +137,7 @@ export async function notifyForTrip(
   const subs = await subsFor(students.map((s) => s.roll_no));
   const byStop = new Map(view.stops.map((s) => [s.id, s]));
   const routeName = view.route.short || view.route.name;
-  const home = direction === 'inbound';
+
 
   for (const st of students) {
     const mine = st.stop_id ? byStop.get(st.stop_id) : null;
@@ -151,7 +151,7 @@ export async function notifyForTrip(
       for (const d of devices) {
         await deliver(d, {
           kind: 'started',
-          title: home ? `${routeName} has left the college` : `${routeName} has started`,
+          title: `${routeName} has started`,
           body: mine ? `Heading for ${mine.name}.` : 'Your bus is on the way.',
           tag: `trip-${tripId}-started`,
           url: '/track',
@@ -185,10 +185,8 @@ export async function notifyForTrip(
   }
 
   // ---- reached the college -------------------------------------------
-  // Outbound only. Nobody needs telling that the bus home arrived at the
-  // village they are standing in.
   const last = view.stops[view.stops.length - 1];
-  if (!home && last?.arrivedAt) {
+  if (last?.arrivedAt) {
     for (const st of students) {
       if (!await claim(tripId, st.roll_no, 'arrived')) continue;
       for (const d of subs.get(st.roll_no) ?? []) {

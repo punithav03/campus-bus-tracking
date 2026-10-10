@@ -35,7 +35,6 @@ const post = async (p, body, c) => {
   return { status: r.status, body: await r.json().catch(() => ({})) };
 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const baseId = (id) => (id ?? '').replace(/@in$/, '');
 
 const ROUTES = ['route-1', 'route-2', 'route-3'];
 const STUDENTS = {
@@ -94,21 +93,21 @@ for (const routeId of ROUTES) {
 
   const map = await get('/api/state', stu);
   ok('student map has the bus', !!map.trip);
-  ok('student map is on their own route', baseId(map.route?.id) === routeId, map.route?.id);
+  ok('student map is on their own route', map.route?.id === routeId, map.route?.id);
   ok('student map has stops with times',
     (map.stops ?? []).some((s) => s.etaS != null || s.passed));
 
   // ---- the driver ------------------------------------------------------
   const dmap = await get('/api/state', drv);
   ok('driver sees the same bus', !!dmap.trip);
-  ok('driver is on his own route', baseId(dmap.route?.id) === routeId, dmap.route?.id);
+  ok('driver is on his own route', dmap.route?.id === routeId, dmap.route?.id);
 
   // ---- isolation -------------------------------------------------------
   const other = ROUTES.find((r) => r !== routeId);
   const otherStu = await login(STUDENTS[other].roll);
   const om = await get('/api/state', otherStu);
   ok(`a ${other} student is not shown this bus`,
-    baseId(om.route?.id) === other, om.route?.id);
+    om.route?.id === other, om.route?.id);
 
   // ---- stop it ---------------------------------------------------------
   const stopped = await post(`/api/trip?route=${routeId}`, { action: 'stop-replay' }, adm);

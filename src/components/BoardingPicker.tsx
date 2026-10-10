@@ -11,7 +11,7 @@ import { haptic } from '@/lib/device';
  * times — a setup step and a settings screen are the same question, and
  * writing it twice is how the two drift apart.
  *
- * Every option carries its own pickup and drop time. A list of village names
+ * Every option carries its own pickup time. A list of village names
  * makes the student do the work of remembering which one is theirs; a list
  * that says "Tiruchanoor · 08:25" answers the question they actually came
  * with.
@@ -19,7 +19,7 @@ import { haptic } from '@/lib/device';
 
 export interface StopOption {
   id: string; name: string; seq: number; estimated: boolean;
-  pickup: string; drop: string;
+  pickup: string;
 }
 interface RouteInfo { id: string; code: string; name: string; color: string }
 
@@ -117,10 +117,7 @@ export function BoardingPicker({
                 {s.name}
                 {s.estimated && <span className="ti-approx" title="Position is approximate">~</span>}
               </span>
-              <span className="bp-times num">
-                <span>{s.pickup}</span>
-                <span className="bp-drop">{s.drop}</span>
-              </span>
+              <span className="bp-times num">{s.pickup}</span>
             </button>
           ))}
       </div>
@@ -130,8 +127,7 @@ export function BoardingPicker({
       <div className="bp-foot">
         {pick && (
           <p className="bp-summary">
-            Picked up at <strong>{pick.name}</strong> around <strong>{pick.pickup}</strong>,
-            dropped back around <strong>{pick.drop}</strong>.
+            Picked up at <strong>{pick.name}</strong> around <strong>{pick.pickup}</strong>.
           </p>
         )}
         <div className="bp-actions">

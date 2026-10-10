@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
 import { requireRoute } from '@/lib/guard';
-import { engineKey } from '@/lib/network';
-import { directionNow } from '@/lib/trip-store';
 import { ensureLive } from '@/lib/live';
 import { engine } from '@/lib/engine';
 import type { Ping, PingSource } from '@/lib/types';
@@ -29,7 +27,7 @@ export async function POST(req: Request) {
   }
 
   const { pings, source = 'driver' } = body;
-  const routeId = engineKey(g.routeId!, directionNow());
+  const routeId = g.routeId!;
   if (!Array.isArray(pings) || pings.length === 0) {
     return NextResponse.json({ error: 'pings[] required' }, { status: 400 });
   }

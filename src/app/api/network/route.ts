@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { engine } from '@/lib/engine';
-import { getNetwork, engineKey } from '@/lib/network';
-import { directionNow } from '@/lib/trip-store';
+import { getNetwork } from '@/lib/network';
 import { requireSession } from '@/lib/guard';
 
 export const dynamic = 'force-dynamic';
@@ -24,15 +23,8 @@ export async function GET(req: Request) {
       ? net.routes
       : net.routes.filter((r) => r.id === g.session.routeId);
 
-    // Which bus "route 2" means depends on the time of day — the morning run
-    // and the run home are separate trips on separate lines through the same
-    // villages. Looking only at the outbound key is why the fleet screen
-    // showed a route as live while offering to start a demo on it.
-    const direction = directionNow();
     const routes = mine.map((r) => {
-      const key = engineKey(r.id, direction);
-      const view = engine.view(key) ?? engine.view(r.id);
-      const liveKey = engine.view(key) ? key : r.id;
+      const view = engine.view(r.id);
       // LIVE has to mean "we know where it is now". 'estimated' means the
       // engine is carrying the bus forward on its last known speed because
       // nothing has reported in — honest for a marker, a lie for a badge.
@@ -60,7 +52,7 @@ export async function GET(req: Request) {
               lat: view.trip.lat,
               lng: view.trip.lng,
               bearing: view.trip.bearing,
-              replaying: engine.isReplaying(liveKey),
+              replaying: engine.isReplaying(r.id),
             }
           : null,
       };

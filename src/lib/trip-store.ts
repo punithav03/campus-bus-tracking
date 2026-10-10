@@ -17,7 +17,15 @@ import type { StopEvent } from './types';
  * that makes the ETA model better over time.
  */
 
-export type Direction = 'outbound' | 'inbound';
+/**
+ * Kept as a column and a type so the history already written stays readable,
+ * but there is only one run. The college drives the route in the morning;
+ * the afternoon trip was modelled before anyone asked for it, and an
+ * unused direction threaded through every lookup was a steady source of
+ * bugs — the student's own screen saying "not running" under a live bus
+ * being the worst of them.
+ */
+export type Direction = 'outbound';
 
 export interface OpenTrip {
   id: number;
@@ -160,27 +168,7 @@ export async function recordStopEvents(
  * a question whose wrong answer sends every student to the wrong side of the
  * route. Anything from midday on is the run home.
  */
-export function directionNow(now = new Date()): Direction {
-  return istHour(now) >= 12 ? 'inbound' : 'outbound';
-}
-
-/**
- * The hour in India, wherever this is running.
- *
- * getTime() is already UTC, so IST is simply +5:30 — and the result must be
- * read with getUTCHours(), because getHours() would convert it a second time
- * into the server's own zone.
- *
- * The previous version subtracted getTimezoneOffset() as well. On Render,
- * which runs in UTC, that offset is zero and it happened to give the right
- * answer. On a machine already set to IST it shifted the clock by eleven
- * hours, so at half past seven in the evening the app believed it was half
- * past six in the morning and ran the outbound route — the bus home simply
- * did not exist.
- */
-export function istHour(now = new Date()): number {
-  return new Date(now.getTime() + 330 * 60_000).getUTCHours();
-}
+export const directionNow = (): Direction => 'outbound';
 
 /** Minutes since midnight in India. */
 export function istMinutes(now = new Date()): number {

@@ -28,7 +28,7 @@ function clockPlus(start: string, offsetS: number): string {
  * themselves would make route_id student-asserted, and route_id is what every
  * other authorisation decision in the app rests on.
  *
- * Every option carries its own pickup and drop time, so the picker shows the
+ * Every option carries its own pickup time, so the picker shows the
  * consequence of the choice rather than a bare list of village names.
  */
 export async function GET(req: Request) {
@@ -47,8 +47,6 @@ export async function GET(req: Request) {
   );
 
   const start = route?.sched_start ?? '07:00';
-  const last = stops.length ? stops[stops.length - 1].sched_offset_s : 0;
-
   const me = await one<{ stop_id: string | null }>(
     'SELECT stop_id FROM students WHERE roll_no = $1', [g.session.sub],
   );
@@ -63,8 +61,6 @@ export async function GET(req: Request) {
         seq: s.seq,
         estimated: s.estimated,
         pickup: clockPlus(start, s.sched_offset_s),
-        // The afternoon run reverses, so the stop furthest out is reached last.
-        drop: clockPlus('16:45', last - s.sched_offset_s),
       })),
     },
     { headers: { 'Cache-Control': 'no-store' } },

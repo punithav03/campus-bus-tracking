@@ -1,5 +1,5 @@
 import { engine } from './engine';
-import { getRoute, engineKey, baseRouteId, INBOUND } from './network';
+import { getRoute } from './network';
 import {
   runningTrips, beat, recordStopEvents, closeTrip, type Direction,
 } from './trip-store';
@@ -60,7 +60,7 @@ async function boot() {
 async function rehydrate() {
   const open = await runningTrips();
   for (const t of open) {
-    const key = engineKey(t.routeId, t.direction);
+    const key = t.routeId;
     if (engine.view(key)?.trip) continue;          // already in memory
     if (t.distAlongM == null || t.lat == null || t.lng == null) continue;
 
@@ -91,8 +91,8 @@ async function tick() {
       const tripId = Number(trip.id);
       if (!Number.isFinite(tripId)) continue;     // a replay, not a real run
 
-      const routeId = baseRouteId(key);
-      const direction: Direction = key.endsWith(INBOUND) ? 'inbound' : 'outbound';
+      const routeId = key;
+      const direction: Direction = 'outbound';
 
       await beat(tripId, {
         distAlongM: view.trip.distAlongM,

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireRoute } from '@/lib/guard';
 import { engine } from '@/lib/engine';
-import { getRoute, engineKey } from '@/lib/network';
-import { openTrip, closeTrip, directionNow, type Direction } from '@/lib/trip-store';
+import { getRoute } from '@/lib/network';
+import { openTrip, closeTrip, directionNow } from '@/lib/trip-store';
 import { demoTrace } from '@/lib/demo-run';
 import { ensureLive } from '@/lib/live';
 import { one } from '@/lib/db';
@@ -10,20 +10,13 @@ import { one } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-/**
- * Start or end a run.
- *
- * The DIRECTION is decided by the clock, not asked of the driver. He does the
- * same job twice a day and making him classify it is a question whose wrong
- * answer sends every student to the wrong side of the route. Anything from
- * midday on is the run home.
- */
+/** Start or end a run. One route, one direction: village to campus. */
 export async function POST(req: Request) {
   const g = requireRoute(req, ['driver', 'admin']);
   if (!g.ok) return g.res;
   await ensureLive();
 
-  let body: { action?: string; speed?: number; direction?: Direction };
+  let body: { action?: string; speed?: number };
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'malformed request body' }, { status: 400 });
   }
@@ -35,11 +28,8 @@ export async function POST(req: Request) {
   if ((action === 'replay' || action === 'stop-replay') && g.session.role !== 'admin') {
     return NextResponse.json({ error: 'Not allowed.' }, { status: 403 });
   }
-  // An admin may force a direction when testing; a driver never can.
-  const direction: Direction = (g.session.role === 'admin' && body?.direction)
-    ? body.direction
-    : directionNow();
-  const key = engineKey(routeId, direction);
+  const direction = directionNow();
+  const key = routeId;
 
   if (!getRoute(key)) {
     return NextResponse.json({ error: 'unknown route' }, { status: 404 });
