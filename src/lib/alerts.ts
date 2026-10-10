@@ -2,6 +2,7 @@ import { sql } from './db';
 import { engine } from './engine';
 import { engineKey } from './network';
 import { scheduledRoutes } from './live';
+import { istMinutes } from './trip-store';
 
 /**
  * What the transport office needs to know without watching the screen.
@@ -24,11 +25,6 @@ const GRACE_MIN = 10;
 const LATE_S = 15 * 60;
 /** Silence this long from a bus that is supposed to be running. */
 const QUIET_MS = 3 * 60_000;
-
-function istMinutes(now = new Date()): number {
-  const ist = new Date(now.getTime() + (5.5 * 60 - now.getTimezoneOffset()) * 60_000);
-  return ist.getHours() * 60 + ist.getMinutes();
-}
 
 async function raise(routeId: string, kind: Kind, severity: 'warn' | 'bad', message: string) {
   // The partial unique index makes this idempotent: an alert already open for

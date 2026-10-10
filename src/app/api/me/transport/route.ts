@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { one, sql } from '@/lib/db';
 import { requireSession } from '@/lib/guard';
 import { engine } from '@/lib/engine';
-import { getRoute } from '@/lib/network';
+import { getRoute, engineKey } from '@/lib/network';
+import { directionNow } from '@/lib/trip-store';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -70,6 +71,14 @@ export async function GET(req: Request) {
   const start = route?.sched_start ?? '07:00';
   const lastOffset = stops.length ? stops[stops.length - 1].sched_offset_s : 0;
 
+  // Which bus "my route" means depends on the time of day. The morning run
+  // and the run home are separate trips on separate lines through the same
+  // villages, and this screen used to look only under the morning key — so
+  // an afternoon bus was live on the map and on the fleet screen while the
+  // student's own home screen said it was not running.
+  const direction = directionNow();
+  const key = engineKey(session.routeId, direction);
+
   // Live position, if the bus is running RIGHT NOW.
   //
   // The engine keeps a trip's view after it finishes — the arrival time and
@@ -77,12 +86,12 @@ export async function GET(req: Request) {
   // as "there is a bus", and treating the two as equal is what left the home
   // screen showing LIVE, with the road scrolling, half an hour after the run
   // ended. A finished or stale trip is not live.
-  const raw = engine.view(session.routeId);
+  const raw = engine.view(key) ?? engine.view(session.routeId);
   const view = raw;
   const isLive = !!raw?.trip
     && raw.trip.status === 'running'
     && (raw.trip.confidence === 'live' || raw.trip.confidence === 'recent');
-  const geo = getRoute(session.routeId);
+  const geo = getRoute(key) ?? getRoute(session.routeId);
 
   let eta: { seconds: number; clock: string; stopsAway: number; passed: boolean } | null = null;
   if (view?.trip && myStop) {

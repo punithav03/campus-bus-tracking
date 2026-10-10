@@ -19,7 +19,8 @@
     "seed:reroute": "node scripts/seed.mjs --refresh-shape",
     "roads": "node scripts/check-roads.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "demo:reset": "node scripts/demo-reset.mjs"
+    "demo:reset": "node scripts/demo-reset.mjs",
+    "test": "node scripts/_auth.test.mjs && node scripts/_premium.test.mjs && node scripts/_demo.test.mjs"
   },
   "dependencies": {
     "@capacitor-community/background-geolocation": "^1.2.26",

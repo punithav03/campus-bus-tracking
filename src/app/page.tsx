@@ -189,16 +189,6 @@ function HomeInner() {
             {t?.boarding?.estimated && <span className="ti-approx" title="Position is approximate">~</span>}
           </span>
         </div>
-        <div className="ti-split">
-          <div className="ti-row ti-row-half">
-            <span className="ti-row-k">Pickup</span>
-            <span className="ti-row-v num">{t?.boarding?.pickup ?? '—'}</span>
-          </div>
-          <div className="ti-row ti-row-half">
-            <span className="ti-row-k">Drop</span>
-            <span className="ti-row-v num">{t?.boarding?.drop ?? '—'}</span>
-          </div>
-        </div>
 
         <WaitingButton stopName={t?.boarding?.name ?? null} />
 

@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { useSession } from '@/lib/useSession';
@@ -661,17 +662,21 @@ export function TrackClient({
           <div className="card enter" data-i="1">
             <div className="card-head"><span className="card-title">Your boarding point</span></div>
             <div className="card-body" style={{ display: 'grid', gap: 14 }}>
+              {/* Shown, not editable. There is one place to change where you
+                  board — Settings — and offering a second one here meant two
+                  controls for the same fact, with nothing telling the student
+                  which the notifications would use. */}
               <div className="field">
                 <span className="field-label">Stop</span>
-                <select
-                  className="input"
-                  value={myStopId ?? ''}
-                  onChange={(e) => chooseStop(e.target.value)}
-                >
-                  {state?.stops.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
+                <div className="mystop">
+                  <span className="mystop-name">
+                    {state?.stops.find((s) => s.id === myStopId)?.name ?? '—'}
+                  </span>
+                  <Link href="/settings" className="mystop-edit" prefetch={false}
+                        onClick={() => haptic('tick')}>
+                    Change
+                  </Link>
+                </div>
               </div>
               <div className="field">
                 <span className="field-label">Walk to the stop · {walkMin} min</span>

@@ -161,7 +161,29 @@ export async function recordStopEvents(
  * route. Anything from midday on is the run home.
  */
 export function directionNow(now = new Date()): Direction {
-  // IST, regardless of where the server happens to be.
-  const ist = new Date(now.getTime() + (5.5 * 60 - now.getTimezoneOffset()) * 60_000);
-  return ist.getHours() >= 12 ? 'inbound' : 'outbound';
+  return istHour(now) >= 12 ? 'inbound' : 'outbound';
+}
+
+/**
+ * The hour in India, wherever this is running.
+ *
+ * getTime() is already UTC, so IST is simply +5:30 — and the result must be
+ * read with getUTCHours(), because getHours() would convert it a second time
+ * into the server's own zone.
+ *
+ * The previous version subtracted getTimezoneOffset() as well. On Render,
+ * which runs in UTC, that offset is zero and it happened to give the right
+ * answer. On a machine already set to IST it shifted the clock by eleven
+ * hours, so at half past seven in the evening the app believed it was half
+ * past six in the morning and ran the outbound route — the bus home simply
+ * did not exist.
+ */
+export function istHour(now = new Date()): number {
+  return new Date(now.getTime() + 330 * 60_000).getUTCHours();
+}
+
+/** Minutes since midnight in India. */
+export function istMinutes(now = new Date()): number {
+  const ist = new Date(now.getTime() + 330 * 60_000);
+  return ist.getUTCHours() * 60 + ist.getUTCMinutes();
 }

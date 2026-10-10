@@ -55,12 +55,16 @@ ok('forged admin cookie rejected', (await get('/api/auth/me', forged)).body.user
 ok('garbage cookie rejected', (await get('/api/auth/me', 'svpcet_session=abc.def.ghi')).body.user === null);
 
 console.log('\n── ROUTE ISOLATION ──');
+// The server picks the direction from the clock: in the afternoon "my route"
+// is the run home, served as route-N@in. These checks care which BUS it is,
+// not which way it is pointing, so compare the base id.
+const base = (id) => (id ?? '').replace(/@in$/, '');
 ok('anon /api/state 401', (await get('/api/state')).status === 401);
 ok('anon /api/network 401', (await get('/api/network')).status === 401);
 const s2 = await get('/api/state', stu.cookie);
-ok('student gets own route', s2.body.route?.id === 'route-2', JSON.stringify(s2.body.route?.id));
+ok('student gets own route', base(s2.body.route?.id) === 'route-2', JSON.stringify(s2.body.route?.id));
 const s2b = await get('/api/state?route=route-1', stu.cookie);
-ok('student cannot switch route', s2b.body.route?.id === 'route-2', JSON.stringify(s2b.body.route?.id));
+ok('student cannot switch route', base(s2b.body.route?.id) === 'route-2', JSON.stringify(s2b.body.route?.id));
 const n2 = await get('/api/network', stu.cookie);
 ok('student sees exactly 1 route', n2.body.routes?.length === 1);
 const nA = await get('/api/network', adm.cookie);
@@ -97,7 +101,7 @@ const openedBy = await post('/api/trip', { routeId: 'route-1', action: 'start' }
 ok('start succeeds', openedBy.status === 200, JSON.stringify(openedBy.body));
 const mine = await get('/api/state', drv.cookie);
 ok('driver got his own route, not the one he asked for',
-  mine.body.route?.id === 'route-2', `served ${mine.body.route?.id}`);
+  base(mine.body.route?.id) === 'route-2', `served ${mine.body.route?.id}`);
 await post('/api/trip', { action: 'end' }, drv.cookie);
 
 console.log('\n── CSV IMPORT ──');

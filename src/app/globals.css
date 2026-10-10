@@ -2216,3 +2216,17 @@ html, body { max-width: 100%; }
 .adm-eta-u strong { color: var(--text); font-weight: 650; }
 .adm-eta-done { font-size: 13px; color: var(--live); }
 .adm-eta-done strong { font-weight: 700; }
+
+/* The boarding point on Track: stated, with one way out to change it. */
+.mystop {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 13px; border-radius: 11px;
+  background: var(--bg-2); border: 1px solid var(--line);
+}
+.mystop-name { flex: 1; font-size: 14px; font-weight: 600; letter-spacing: -.015em; }
+.mystop-edit {
+  flex: none; font-size: 11.5px; font-weight: 650; text-decoration: none;
+  color: var(--accent); padding: 4px 9px; border-radius: 8px;
+  transition: background var(--fast) var(--ease);
+}
+.mystop-edit:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
