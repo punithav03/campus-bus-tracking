@@ -62,36 +62,33 @@ export function StripMap({
     if (!myStopId || !stops.length) return;
     if (scrolledTo.current === myStopId) return;
 
-    const row = scroller.current
-      ?.querySelector<HTMLElement>(`[data-stop="${CSS.escape(myStopId)}"]`);
-    if (!row) return;
+    const box = scroller.current;
+    const row = box?.querySelector<HTMLElement>(`[data-stop="${CSS.escape(myStopId)}"]`);
+    if (!box || !row) return;
 
-    // Which element actually scrolls varies: on a wide screen the strip has
-    // its own max-height and scrolls, on a phone it sits inside the bottom
-    // sheet and the sheet scrolls. Walk up and find whichever one really
-    // does, rather than assuming — scrolling the wrong box moves nothing.
-    let box: HTMLElement | null = row.parentElement;
-    while (box) {
-      const oy = getComputedStyle(box).overflowY;
-      if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight + 4) break;
-      box = box.parentElement;
-    }
+    /**
+     * Only this box, and only when this box is the thing that scrolls.
+     *
+     * The first attempt walked up to find whatever scrolled and fell back to
+     * scrollIntoView. On a phone the list sits inside the bottom sheet with
+     * no scroller of its own, so that scrolled the PAGE — dragging the live
+     * bus, the arrival time and the whole hero off the top of the screen to
+     * reveal a stop list the student had not asked to see yet.
+     *
+     * Moving the page out from under someone is never worth it. If the list
+     * does not scroll independently, leave it alone; they will scroll down
+     * when they want the stops, and their own stop is marked when they get
+     * there.
+     */
+    if (box.scrollHeight <= box.clientHeight + 4) return;
 
     const first = scrolledTo.current === null;
     scrolledTo.current = myStopId;
 
-    if (!box) {
-      // Nothing scrolls on its own — the page does. Only nudge it if the row
-      // is genuinely off screen; yanking the viewport on load is worse than
-      // a little scrolling.
-      const r = row.getBoundingClientRect();
-      if (r.top >= 0 && r.bottom <= window.innerHeight) return;
-      row.scrollIntoView({ block: 'center', behavior: first ? 'auto' : 'smooth' });
-      return;
-    }
-
     const rTop = row.offsetTop - box.offsetTop;
-    if (rTop >= box.scrollTop && rTop + row.offsetHeight <= box.scrollTop + box.clientHeight) return;
+    const visible = rTop >= box.scrollTop
+      && rTop + row.offsetHeight <= box.scrollTop + box.clientHeight;
+    if (visible) return;
 
     // A little above centre, so the stops still to come are what you see.
     box.scrollTo({

@@ -74,6 +74,11 @@ function HomeInner() {
         if (!alive) return;
         setT(j);
         setErr(null);
+        // The launch screen waits on this. Without it the splash always sat
+        // for its full ceiling before lifting, even though the screen it was
+        // covering had been ready for a second — and a launch screen that
+        // outstays the content is exactly what makes an app feel slow.
+        document.documentElement.dataset.ready = '1';
         if (j.live?.nextStop) setLastSeen({ at: Date.now(), near: j.live.nextStop });
       } catch {
         if (alive) setErr('Could not reach the server.');

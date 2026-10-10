@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { TopBar } from './TopBar';
 import { useSession, homeFor } from '@/lib/useSession';
 import { PasswordGate } from './PasswordGate';
 import type { Role } from '@/lib/session';
@@ -38,7 +39,13 @@ export function RoleGate({
   if (phase !== 'in' || !user || !allow.includes(user.role)) {
     return (
       <div className="shell" style={{ maxWidth: 560 }}>
-        <div className="ti-skeleton" aria-hidden style={{ marginTop: 64 }}>
+        {/* The header belongs in the skeleton too. Without it the page had
+            no brand mark, so the launch logo had nothing to fly into and sat
+            for its full ceiling before giving up — and the header then
+            popped in afterwards. */}
+        <TopBar />
+        <div className="ti-skeleton" aria-hidden>
+          <div className="sk sk-hero" />
           <div className="sk sk-row" />
         </div>
       </div>

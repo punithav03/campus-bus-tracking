@@ -67,7 +67,12 @@ const BOOT_CSS = `
   color:#8b97a8;transition:opacity .22s ease}
 #boot[data-phase="fly"] .boot-word{opacity:0}
 html[data-splash="skip"] #boot,#boot[data-phase="gone"]{display:none}
-html[data-splash="running"] .brand-mark{opacity:0}
+/* The mark the launch logo is flying INTO must not already be sitting
+   there — two copies of the same logo on screen is what makes the
+   arrival look like a glitch rather than a landing. Both marks, because
+   the login screen has its own and it is the first screen anyone sees. */
+html[data-splash="running"] .brand-mark,
+html[data-splash="running"] .login-mark{opacity:0}
 /* Failsafe. If the JavaScript never arrives, the launch screen must still get
    out of the way rather than holding the app hostage behind a logo. */
 #boot{animation:bootGiveUp 0s linear 8s forwards}

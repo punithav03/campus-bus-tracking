@@ -63,10 +63,22 @@ export function Splash() {
 
     document.documentElement.dataset.splash = 'running';
 
+    /**
+     * Where the launch mark is flying TO.
+     *
+     * Whichever mark this screen actually shows. On the login page that is
+     * the one on the card; everywhere else it is the one in the header. It
+     * used to look only for the header, so on the very first open — which is
+     * always the login page — there was nothing to fly to and the splash
+     * just vanished.
+     */
+    const findTarget = () =>
+      document.querySelector<HTMLElement>('.login-mark, .brand-mark');
+
     const fly = () => {
       if (done) return;
       const logo = document.getElementById('boot-logo');
-      const target = document.querySelector<HTMLElement>('.brand-mark');
+      const target = findTarget();
       const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (still || !logo || !target) { remove(); return; }
 
@@ -95,10 +107,31 @@ export function Splash() {
     // MAX_HOLD_MS, because a launch screen that waits on the network is
     // exactly the thing that feels stuck.
     const started = performance.now();
-    // Only the Track screen loads geometry worth waiting for; /drive, /record
-    // and /admin are ready as soon as they are on screen.
-    const ready = () =>
-      document.documentElement.dataset.ready === '1' || window.location.pathname !== '/';
+
+    /**
+     * Ready means two things, and it used to only check one.
+     *
+     * The screen has to have something worth revealing — only Track loads
+     * geometry worth waiting for — AND the mark it will fly into has to be
+     * on screen. Without the second test the animation fired before the
+     * login card had rendered, found nothing to aim at, and fell back to
+     * simply disappearing. Which is the whole effect, missing, on the first
+     * screen anyone ever sees.
+     */
+    /**
+     * Only the map is worth waiting for.
+     *
+     * Track draws a route and a bus, and lifting the logo before that lands
+     * reveals an empty map — so it waits for the page to say it is ready.
+     * Every other screen is its own content: once the shell has painted
+     * there is nothing further to wait for, and holding the launch screen
+     * while a background fetch finishes is exactly what makes an app feel
+     * slow. Home used to sit for its full ceiling for no reason at all.
+     */
+    const contentReady = () =>
+      !window.location.pathname.startsWith('/track')
+      || document.documentElement.dataset.ready === '1';
+    const ready = () => contentReady() && !!findTarget();
 
     const check = () => {
       if (done) return;

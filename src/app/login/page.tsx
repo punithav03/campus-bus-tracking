@@ -31,7 +31,11 @@ export default function LoginPage() {
     if (phase === 'in' && user) router.replace(homeFor(user.role));
   }, [phase, user, router]);
 
-  useEffect(() => { idRef.current?.focus(); }, []);
+  useEffect(() => {
+    idRef.current?.focus();
+    // The card is on screen; the launch mark can come down onto it now.
+    document.documentElement.dataset.ready = '1';
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
