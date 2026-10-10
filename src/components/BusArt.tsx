@@ -50,6 +50,12 @@ export function BusArt({
           <stop offset="0%" stopColor="var(--accent)" stopOpacity=".24" />
           <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
         </linearGradient>
+        {/* A flat yellow panel reads as a cartoon; a little depth down the
+            body reads as a bus. */}
+        <linearGradient id="ba-shell" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--bus-shell)" />
+          <stop offset="100%" stopColor="var(--bus-shell-2)" />
+        </linearGradient>
       </defs>
 
       {/* Generously oversized: `slice` crops to fill, and a rect that stopped
@@ -77,8 +83,10 @@ export function BusArt({
         <rect className="bus-art-win" x="138" y="52" width="30" height="22" rx="5" />
         <rect className="bus-art-win" x="174" y="52" width="30" height="22" rx="5" />
         <rect className="bus-art-door" x="208" y="52" width="14" height="40" rx="4" />
-        {/* The route's own colour, so each line's screen feels like that line */}
-        <rect x="92" y="80" width="136" height="7" fill="var(--accent)" />
+        {/* The dark skirt a school bus has, and above it a thin band in the
+            route's own colour so each line still feels like itself. */}
+        <rect className="bus-art-band" x="92" y="84" width="136" height="14" rx="3" />
+        <rect x="92" y="79" width="136" height="5" fill="var(--accent)" />
         <circle className="bus-art-lamp" cx="224" cy="92" r="3.4" />
         <circle className="bus-art-tail" cx="96" cy="92" r="3" />
         <g className="bus-art-wheel">

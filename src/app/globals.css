@@ -2037,28 +2037,31 @@ html, body { max-width: 100%; }
    ========================================================================== */
 
 :root {
-  --bus-shell:  #f2f6fd;
-  --bus-stroke: transparent;
-  --bus-glass:  #131a26;
+  /* A school bus is yellow. Everyone knows what it is before they have read
+     a word, and it is the same bus in both themes — a vehicle that changes
+     colour with the theme is a different vehicle. Only the things AROUND it
+     adapt. */
+  --bus-shell:  #f7b733;
+  --bus-shell-2:#e39a14;
+  --bus-stroke: rgba(60,38,0,.22);
+  --bus-glass:  #14243c;
+  --bus-band:   #1d2b45;
   --bus-road:   rgba(255,255,255,.10);
   --bus-dash:   rgba(255,255,255,.30);
   --bus-hill:   rgba(255,255,255,.07);
   --bus-tyre:   #11161f;
-  --bus-hub:    #4b5768;
+  --bus-hub:    #b9c3d2;
   --bus-shadow: rgba(0,0,0,.30);
 }
 
 /* A white bus on a pale sky is an empty box, which is what the light theme
    used to show. Flip it: dark body, bright glass, and a visible road. */
+/* Same yellow bus. Only the road, hills and shadow change, because those
+   are the scene it is standing in rather than the bus itself. */
 :root[data-theme='light'] {
-  --bus-shell:  #1d2b45;
-  --bus-stroke: rgba(13,22,38,.14);
-  --bus-glass:  #cfe0f7;
   --bus-road:   rgba(20,34,58,.10);
   --bus-dash:   rgba(20,34,58,.26);
   --bus-hill:   rgba(20,34,58,.09);
-  --bus-tyre:   #0f1724;
-  --bus-hub:    #8a99b0;
   --bus-shadow: rgba(20,34,58,.18);
 }
 
@@ -2067,9 +2070,11 @@ html, body { max-width: 100%; }
 .bus-art-hills path { fill: var(--bus-hill); }
 .bus-art-road   { fill: var(--bus-road); }
 .bus-art-dashes rect { fill: var(--bus-dash); }
-.bus-art-shell  { fill: var(--bus-shell); stroke: var(--bus-stroke); stroke-width: 1; }
-.bus-art-win    { fill: var(--bus-glass); opacity: .92; }
-.bus-art-door   { fill: var(--bus-glass); opacity: .72; }
+.bus-art-shell  { fill: url(#ba-shell); stroke: var(--bus-stroke); stroke-width: 1; }
+.bus-art-win    { fill: var(--bus-glass); opacity: .94; }
+.bus-art-door   { fill: var(--bus-glass); opacity: .76; }
+/* The dark band along the side, like the stripe on a real school bus. */
+.bus-art-band   { fill: var(--bus-band); }
 .bus-art-lamp   { fill: #ffd166; }
 .bus-art-tail   { fill: #f0506e; opacity: .9; }
 .bus-art-tyre   { fill: var(--bus-tyre); }

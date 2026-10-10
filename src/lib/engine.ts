@@ -496,7 +496,14 @@ class Engine {
       if (batch.length) this.ingest(routeId, batch, 'replay');
       // Run the trace to its end. Stopping at 'finished' cut off the
       // stationary fixes at the terminus, so the arrival there never fired.
-      if (state.idx >= points.length) this.stopReplay(routeId);
+      //
+      // Then close the trip. Leaving it open meant the fleet card sat on LIVE
+      // with a frozen position while offering to start the demo again — two
+      // contradictory things on one card.
+      if (state.idx >= points.length) {
+        this.stopReplay(routeId);
+        this.end(routeId);
+      }
     }, TICK_MS);
 
     this.replays.set(routeId, state);

@@ -19,6 +19,14 @@ import { getReferenceTrip } from './network';
  * Remove this file and the two call sites to take demo mode out entirely.
  */
 
+/**
+ * `t` is SECONDS FROM THE START OF THE RUN, not an epoch time.
+ *
+ * That is the shape the recorded trace uses and the shape the replay expects.
+ * Emitting epoch milliseconds here made the engine believe the bus had set
+ * off decades in the future: the arrival time came out as 147 minutes, the
+ * delay as 974 minutes late, and the run fell over partway through.
+ */
 export interface TracePoint { t: number; lat: number; lng: number; spd: number; acc: number }
 
 /** Metres between successive synthetic fixes. One per second at road speed. */
@@ -80,7 +88,6 @@ export function syntheticTrace(route: LoadedRoute): TracePoint[] {
 
   const stops = [...route.stops].sort((a, b) => a.distAlongM - b.distAlongM);
   const out: TracePoint[] = [];
-  const t0 = Date.now();
 
   let elapsed = 0;
   let nextStop = 0;
@@ -98,7 +105,7 @@ export function syntheticTrace(route: LoadedRoute): TracePoint[] {
     const jitter = () => (Math.random() - 0.5) * 0.000045;
 
     out.push({
-      t: t0 + elapsed * 1000,
+      t: elapsed,
       lat: lat + jitter(),
       lng: lng + jitter(),
       spd: Number(speed.toFixed(2)),
@@ -113,7 +120,7 @@ export function syntheticTrace(route: LoadedRoute): TracePoint[] {
       const [slng, slat] = pointAt(route.shape, cum, stops[nextStop].distAlongM);
       for (let k = 0; k < DWELL_S; k++) {
         out.push({
-          t: t0 + elapsed * 1000,
+          t: elapsed,
           lat: slat + jitter(), lng: slng + jitter(),
           spd: 0, acc: 5 + Math.random() * 5,
         });

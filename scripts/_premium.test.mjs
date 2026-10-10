@@ -1,6 +1,6 @@
 /**
  * Checks for the features added on top of the core app: persisted trips, the
- * return journey, push subscriptions, admin alerts and "I'm at the stop".
+ * return journey, push subscriptions and "I am at the stop".
  *
  *   node scripts/_premium.test.mjs
  */
@@ -108,12 +108,6 @@ if (mark.status === 200) {
   ok('cancelling clears it', (await get('/api/driver/waiting', drv)).body.total === 0);
 }
 ok('students cannot read the driver panel', (await get('/api/driver/waiting', stu)).status === 403);
-
-console.log('\n── ALERTS ──');
-const al = await get('/api/admin/alerts', adm);
-ok('admin can read alerts', al.status === 200 && Array.isArray(al.body.alerts));
-ok('students cannot', (await get('/api/admin/alerts', stu)).status === 403);
-ok('drivers cannot', (await get('/api/admin/alerts', drv)).status === 403);
 
 console.log(`\n${fail === 0 ? 'ALL PASS' : 'FAILURES'} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

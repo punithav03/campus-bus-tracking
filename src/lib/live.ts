@@ -1,9 +1,8 @@
 import { engine } from './engine';
-import { getRoute, getNetwork, engineKey, baseRouteId, INBOUND } from './network';
+import { getRoute, engineKey, baseRouteId, INBOUND } from './network';
 import {
   runningTrips, beat, recordStopEvents, closeTrip, type Direction,
 } from './trip-store';
-import { sweepAlerts } from './alerts';
 import { notifyForTrip } from './push';
 import { sql } from './db';
 
@@ -115,37 +114,24 @@ async function tick() {
 
       // No fix for minutes means the phone died, lost signal, or the app was
       // swiped away. Stop pretending we know where the bus is.
-      if (trip.lastSeenAt && Date.now() - trip.lastSeenAt > STALE_MS) {
+      //
+      // Never while a demo is mid-run: the replay feeds in bursts and a slow
+      // stretch of the trace could look like silence, which is why a demo
+      // appeared to cut itself off halfway.
+      if (!engine.isReplaying(key)
+          && trip.lastSeenAt && Date.now() - trip.lastSeenAt > STALE_MS) {
         engine.end(key);
         await closeTrip(tripId, 'abandoned');
         console.log(`[live] ${key} went quiet — closed`);
       }
     }
 
-    await sweepAlerts();
     await sql("DELETE FROM waiting WHERE at < now() - interval '45 minutes'");
   } catch (e) {
     // A tick that throws must not kill the interval, or everything above
     // silently stops for the rest of the process's life.
     console.error('[live] tick:', (e as Error).message);
   }
-}
-
-/** Routes the office expects to be running right now, for the alert sweep. */
-export function scheduledRoutes(): { id: string; name: string; startMin: number; direction: Direction }[] {
-  const out: { id: string; name: string; startMin: number; direction: Direction }[] = [];
-  for (const r of getNetwork().routes) {
-    const fwd = getRoute(r.id);
-    if (!fwd) continue;
-    const [h, m] = fwd.schedStart.split(':').map(Number);
-    out.push({ id: r.id, name: r.name, startMin: h * 60 + m, direction: 'outbound' });
-    const back = getRoute(engineKey(r.id, 'inbound'));
-    if (back) {
-      const [bh, bm] = back.schedStart.split(':').map(Number);
-      out.push({ id: r.id, name: r.name, startMin: bh * 60 + bm, direction: 'inbound' });
-    }
-  }
-  return out;
 }
 
 export { timer as _liveTimer, booted as _liveBooted };

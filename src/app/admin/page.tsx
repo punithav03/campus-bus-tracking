@@ -28,7 +28,6 @@ interface FleetRoute {
 }
 
 interface Driver { id: string; name: string; phone: string; routeId: string | null }
-interface Alert { id: number; routeId: string; kind: string; severity: string; message: string; raisedAt: number }
 
 const fmtDelay = (s: number) => {
   const m = Math.round(Math.abs(s) / 60);
@@ -44,7 +43,6 @@ function AdminInner() {
   const [routes, setRoutes] = useState<FleetRoute[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
-  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,16 +50,14 @@ function AdminInner() {
 
     const load = async () => {
       try {
-        const [n, f, a] = await Promise.all([
+        const [n, f] = await Promise.all([
           fetch('/api/network', { cache: 'no-store' }).then((r) => r.json()),
           fetch('/api/admin/fleet', { cache: 'no-store' }).then((r) => r.json()),
-          fetch('/api/admin/alerts', { cache: 'no-store' }).then((r) => r.json()),
         ]);
         if (!alive) return;
         setRoutes(n.routes ?? []);
         setDrivers(f.drivers ?? []);
         setCounts(f.studentsByRoute ?? {});
-        setAlerts(a.alerts ?? []);
         setErr(null);
       } catch {
         if (alive) setErr('Could not reach the server.');
@@ -79,28 +75,6 @@ function AdminInner() {
   return (
     <div className="shell" style={{ maxWidth: 720 }}>
       <TopBar subtitle="Transport office" />
-
-      {/* The office's real question is "has anything gone wrong", and it
-          should be answered before they have to look for it. Empty on a
-          normal morning — which is the point. */}
-      {alerts.length > 0 && (
-        <div className="alerts enter" data-i="0">
-          {alerts.map((a) => (
-            <div key={a.id} className="alert" data-sev={a.severity}>
-              <span className="alert-ic" aria-hidden>
-                <svg viewBox="0 0 24 24" width="16" height="16">
-                  <path d="M12 4.2 2.6 20h18.8L12 4.2z" fill="none" stroke="currentColor"
-                        strokeWidth="1.7" strokeLinejoin="round" />
-                  <rect x="11.1" y="9.6" width="1.8" height="5" rx=".9" fill="currentColor" />
-                  <circle cx="12" cy="17.1" r="1.05" fill="currentColor" />
-                </svg>
-              </span>
-              <span className="alert-msg">{a.message}</span>
-              <span className="alert-age num">{Math.max(1, Math.round((Date.now() - a.raisedAt) / 60000))}m</span>
-            </div>
-          ))}
-        </div>
-      )}
 
       <div className="adm-summary enter" data-i="0">
         <div className="adm-sum">

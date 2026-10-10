@@ -195,7 +195,12 @@ function DriveInner() {
         </div>
       </div>
 
-      {t.running && <WaitingPanel />}
+      {/* Always, not only while this phone is broadcasting. Students tap
+          "I'm at the stop" before the bus sets off — that is the whole point
+          of it — and during a demo the run is started by the office, so
+          gating on this phone's own trip showed the driver nothing. The
+          panel hides itself when nobody is waiting. */}
+      <WaitingPanel />
       {summary && <TripSummary summary={summary} onDone={() => setSummary(null)} />}
     </div>
   );
