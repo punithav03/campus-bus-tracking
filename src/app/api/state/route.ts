@@ -1,25 +1,36 @@
 import { NextResponse } from 'next/server';
 import { engine } from '@/lib/engine';
+import { requireRoute } from '@/lib/guard';
+import { engineKey } from '@/lib/network';
+import { directionNow } from '@/lib/trip-store';
+import { ensureLive } from '@/lib/live';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /**
- * The single endpoint every student device polls.
+ * The endpoint every signed-in device polls.
  *
- * In production this response is what you would write to object storage every
- * few seconds and serve from a CDN — one origin write regardless of whether ten
- * students or ten thousand are watching. Polling a cached snapshot scales for
- * free; a WebSocket per student does not.
+ * Note what is NOT here: a route id from the caller. For a student or a driver
+ * the route comes out of the signed session cookie, so editing the URL does
+ * nothing — there is no other bus to ask for. Only an admin may name one.
  */
 export async function GET(req: Request) {
-  const routeId = new URL(req.url).searchParams.get('route');
-  if (!routeId) return NextResponse.json({ error: 'route required' }, { status: 400 });
+  const g = requireRoute(req);
+  if (!g.ok) return g.res;
+  await ensureLive();
 
-  const view = engine.view(routeId);
+  // Morning or afternoon decides which bus "my route" means. The student
+  // asking at 16:50 wants the one going home, and it is a different trip on
+  // a different line through the same villages.
+  const direction = directionNow();
+  const key = engineKey(g.routeId!, direction);
+
+  const view = engine.view(key) ?? engine.view(g.routeId!);
   if (!view) return NextResponse.json({ error: 'unknown route' }, { status: 404 });
 
   return NextResponse.json(
-    { ...view, replaying: engine.isReplaying(routeId) },
+    { ...view, direction, replaying: engine.isReplaying(key) },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

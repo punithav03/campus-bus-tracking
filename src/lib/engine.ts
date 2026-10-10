@@ -380,6 +380,42 @@ class Engine {
     return trip;
   }
 
+  /**
+   * Puts a trip back after the process died.
+   *
+   * A deploy, a crash, or the free tier idling wipes the engine's memory, and
+   * the bus vanishes mid-route with the driver none the wiser. The database
+   * kept a heartbeat — where it was, how fast, which way — so this seeds a
+   * Trip from that and lets the next GPS fix carry on from there.
+   *
+   * It restores position, not history: the stop events already live in the
+   * database, and re-deriving them from a single point would be inventing
+   * arrivals we never saw.
+   */
+  restore(key: string, p: {
+    id: string; startedAt: number; distAlongM: number; speedMps: number;
+    lat: number; lng: number; bearing: number; lastFixAt: number;
+  }): Trip {
+    const trip = new Trip(p.id, key, p.startedAt);
+    trip.distAlongM = p.distAlongM;
+    trip.speedMps = p.speedMps;
+    trip.rawSpeedMps = p.speedMps;
+    trip.lastFixAt = p.lastFixAt;
+    // NOT lastSeenAt: freshness is about how long ago WE heard from the bus,
+    // and we have not. Leaving it at zero makes the marker show as stale
+    // until a real fix arrives, which is the truth.
+    trip.lastSeenAt = 0;
+    this.trips.set(key, trip);
+    return trip;
+  }
+
+  /** Every live trip, for the server-side ticker. */
+  liveTrips(): { key: string; trip: Trip }[] {
+    return [...this.trips.entries()]
+      .filter(([, t]) => t.status === 'running')
+      .map(([key, trip]) => ({ key, trip }));
+  }
+
   end(routeId: string) {
     const t = this.trips.get(routeId);
     if (t) t.status = 'finished';

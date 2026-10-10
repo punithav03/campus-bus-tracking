@@ -23,7 +23,7 @@
  *  · /api is never cached. A stale bus position is worse than none.
  */
 
-const CACHE = 'campusbus-v5';
+const CACHE = 'campusbus-v6';
 const PAGE_TIMEOUT_MS = 2500;
 
 self.addEventListener('install', (e) => {
@@ -104,4 +104,72 @@ self.addEventListener('fetch', (event) => {
       return hit || network;
     }),
   );
+});
+
+
+/* ==========================================================================
+   PUSH
+   The only part of this app that reaches a student who is not looking at it.
+   ========================================================================== */
+
+self.addEventListener('push', (event) => {
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch { /* keep the default */ }
+
+  const title = d.title || 'SVPCET Bus';
+  const options = {
+    body: d.body || '',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    // A tag replaces rather than stacks. Three "bus is coming" notifications
+    // from three ticks would be the fastest way to get push switched off for
+    // good by the person who most needed it.
+    tag: d.tag || 'svpcet-bus',
+    renotify: true,
+    // Vibration is the point: the phone is in a pocket at a bus stop and
+    // nobody is watching the screen.
+    vibrate: [90, 50, 90],
+    data: { url: d.url || '/', kind: d.kind || 'info' },
+    requireInteraction: false,
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+
+  // Reuse a tab that is already open rather than piling up new ones — the
+  // student taps this every morning.
+  event.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      if (new URL(c.url).origin === self.location.origin) {
+        await c.navigate(url).catch(() => {});
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow(url);
+  })());
+});
+
+/**
+ * Chrome occasionally retires a subscription and hands out a new one. Without
+ * this the student stops being told and never finds out why — the UI would
+ * still happily say notifications are on.
+ */
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil((async () => {
+    try {
+      const sub = await self.registration.pushManager.subscribe(
+        event.oldSubscription ? event.oldSubscription.options : { userVisibleOnly: true },
+      );
+      await fetch('/api/push', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(sub.toJSON()),
+      });
+    } catch { /* the app re-subscribes next time it is opened */ }
+  })());
 });

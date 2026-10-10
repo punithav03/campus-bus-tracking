@@ -1,330 +1,217 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { TopBar } from '@/components/TopBar';
-import { PinGate, ForgetPin } from '@/components/PinGate';
-import { authFetch } from '@/lib/client-auth';
-import { fmtAge, fmtClock, fmtDelay } from '@/lib/format';
-import type { RouteSummary, StateView } from '@/lib/types';
+import { RoleGate } from '@/components/RoleGate';
+import { DemoRun } from '@/components/DemoRun';
+import { haptic } from '@/lib/device';
 
 /**
- * The transport office view.
+ * The transport office's screen: every bus, one page.
  *
- * Students are not the only users who matter — a tracker with no institutional
- * value gets switched off. This is the half that answers the questions the
- * office actually has: which bus has gone dark, which route is chronically
- * late, and is the ETA any good.
+ * It answers the only question the office actually has at 8am — "is each bus
+ * out, and is it late" — before it offers anything else. Detail is one tap
+ * away; a dashboard that opens on a wall of numbers makes the reader do the
+ * summarising, which is the job the screen was supposed to do.
  */
 
-interface Rec {
-  id: string; name: string; startedAt: number;
-  fixes: number; markers: number; distanceM: number;
+interface FleetRoute {
+  id: string; code: string; name: string; color: string;
+  schedStart: string; lengthM: number; stopCount: number;
+  firstStop: string; lastStop: string;
+  live: {
+    confidence: string; progress: number; delayS: number; replaying?: boolean;
+    etaEndS: number | null; endName: string | null; arrivedAt: number | null;
+    nextStop: string | null; distAlongM: number;
+  } | null;
 }
 
-interface LiveRoute extends RouteSummary {
-  live: { confidence: string; progress: number; delayS: number; replaying: boolean } | null;
-}
+interface Driver { id: string; name: string; phone: string; routeId: string | null }
+interface Alert { id: number; routeId: string; kind: string; severity: string; message: string; raisedAt: number }
 
-const MODEL_LABEL: Record<string, string> = {
-  profile: 'Route profile · recent pace',
-  legacy: 'Route profile · whole-trip pace',
-  naive: 'Naive distance ÷ speed',
+const fmtDelay = (s: number) => {
+  const m = Math.round(Math.abs(s) / 60);
+  if (m < 1) return 'on time';
+  return `${m} min ${s > 0 ? 'late' : 'early'}`;
 };
 
-const MODEL_NOTE: Record<string, string> = {
-  profile: 'judges speed from the last few minutes',
-  legacy: 'judges speed from the whole trip so far',
-  naive: 'what most trackers ship',
-};
+const clockIn = (s: number) =>
+  new Date(Date.now() + s * 1000).toLocaleTimeString('en-IN',
+    { hour: '2-digit', minute: '2-digit', hour12: false });
 
-function AdminPageInner() {
-  const [routes, setRoutes] = useState<LiveRoute[]>([]);
-  const [routeId, setRouteId] = useState<string | null>(null);
-  const [state, setState] = useState<StateView | null>(null);
-  const [recordings, setRecordings] = useState<Rec[]>([]);
+function AdminInner() {
+  const [routes, setRoutes] = useState<FleetRoute[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    const tick = async () => {
-      const j = await fetch('/api/network').then((r) => r.json()).catch(() => null);
-      if (j?.routes) {
-        setRoutes(j.routes);
-        setRouteId((c) => c ?? j.routes[0]?.id ?? null);
+    let alive = true;
+
+    const load = async () => {
+      try {
+        const [n, f, a] = await Promise.all([
+          fetch('/api/network', { cache: 'no-store' }).then((r) => r.json()),
+          fetch('/api/admin/fleet', { cache: 'no-store' }).then((r) => r.json()),
+          fetch('/api/admin/alerts', { cache: 'no-store' }).then((r) => r.json()),
+        ]);
+        if (!alive) return;
+        setRoutes(n.routes ?? []);
+        setDrivers(f.drivers ?? []);
+        setCounts(f.studentsByRoute ?? {});
+        setAlerts(a.alerts ?? []);
+        setErr(null);
+      } catch {
+        if (alive) setErr('Could not reach the server.');
       }
     };
-    void tick();
-    const t = setInterval(tick, 4000);
-    return () => clearInterval(t);
+
+    void load();
+    const id = setInterval(load, 5000);
+    return () => { alive = false; clearInterval(id); };
   }, []);
 
-  useEffect(() => {
-    if (!routeId) return;
-    const tick = async () => {
-      const j = await fetch(`/api/state?route=${routeId}`).then((r) => r.json()).catch(() => null);
-      if (j && !j.error) setState(j);
-    };
-    void tick();
-    const t = setInterval(tick, 2500);
-    return () => clearInterval(t);
-  }, [routeId]);
-
-  const loadRecordings = async () => {
-    const j = await authFetch('/api/recording', { cache: 'no-store' })
-      .then((r) => r.json()).catch(() => null);
-    if (j?.recordings) setRecordings(j.recordings);
-  };
-  useEffect(() => { void loadRecordings(); }, []);
-
-  const download = async (id: string) => {
-    const r = await authFetch(`/api/recording/${id}`);
-    if (!r.ok) return;
-    const url = URL.createObjectURL(await r.blob());
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${id}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-  };
-
-  const dark = routes.filter((r) => !r.live);
-  const trip = state?.trip ?? null;
-  const color = state?.route.color ?? '#38bdf8';
-
-  const served = useMemo(
-    () => (state?.events ?? []).slice().sort((a, b) => b.arrivedAt - a.arrivedAt),
-    [state],
-  );
+  const running = routes.filter((r) => r.live).length;
+  const students = Object.values(counts).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="shell" style={{ ['--accent' as string]: color }}>
+    <div className="shell" style={{ maxWidth: 720 }}>
       <TopBar subtitle="Transport office" />
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-        <ForgetPin />
-      </div>
-
-      {/* ---- fleet ---- */}
-      <div className="card enter" data-i="0">
-        <div className="card-head">
-          <span className="card-title">Fleet</span>
-          <span style={{ marginLeft: 'auto' }}>
-            {dark.length > 0 ? (
-              <span className="badge" data-tone="warn">{dark.length} not reporting</span>
-            ) : (
-              <span className="badge" data-tone="live">all reporting</span>
-            )}
-          </span>
-        </div>
-        <div>
-          {routes.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => setRouteId(r.id)}
-              className="fleet-row"
-              data-on={r.id === routeId}
-            >
-              <span className="fleet-dot" style={{ background: r.color }} />
-              <span className="fleet-name">
-                <span className="fleet-title">{r.short}</span>
-                <span className="fleet-sub">{r.firstStop} → {r.lastStop}</span>
+      {/* The office's real question is "has anything gone wrong", and it
+          should be answered before they have to look for it. Empty on a
+          normal morning — which is the point. */}
+      {alerts.length > 0 && (
+        <div className="alerts enter" data-i="0">
+          {alerts.map((a) => (
+            <div key={a.id} className="alert" data-sev={a.severity}>
+              <span className="alert-ic" aria-hidden>
+                <svg viewBox="0 0 24 24" width="16" height="16">
+                  <path d="M12 4.2 2.6 20h18.8L12 4.2z" fill="none" stroke="currentColor"
+                        strokeWidth="1.7" strokeLinejoin="round" />
+                  <rect x="11.1" y="9.6" width="1.8" height="5" rx=".9" fill="currentColor" />
+                  <circle cx="12" cy="17.1" r="1.05" fill="currentColor" />
+                </svg>
               </span>
-
-              <span className="fleet-bar">
-                <span
-                  style={{
-                    width: `${Math.round((r.live?.progress ?? 0) * 100)}%`,
-                    background: r.color,
-                  }}
-                />
-              </span>
-
-              <span className="fleet-delay num">{r.live ? fmtDelay(r.live.delayS) : '—'}</span>
-
-              <span className="fleet-state">
-                {r.live ? (
-                  <span className="badge" data-tone={r.live.confidence === 'live' ? 'live' : 'warn'}>
-                    {r.live.replaying ? 'replay' : r.live.confidence}
-                  </span>
-                ) : (
-                  <span className="badge">dark</span>
-                )}
-              </span>
-            </button>
+              <span className="alert-msg">{a.message}</span>
+              <span className="alert-age num">{Math.max(1, Math.round((Date.now() - a.raisedAt) / 60000))}m</span>
+            </div>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* ---- recordings uploaded from the bus ---- */}
-      <div className="card enter" data-i="1" style={{ marginTop: 18 }}>
-        <div className="card-head">
-          <span className="card-title">Recorded rides</span>
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className="badge">{recordings.length}</span>
-            <button className="btn" onClick={loadRecordings}
-                    style={{ padding: '5px 10px', fontSize: 11.5 }}>
-              Refresh
-            </button>
-          </span>
+      <div className="adm-summary enter" data-i="0">
+        <div className="adm-sum">
+          <div className="adm-sum-v num">{running}<span className="adm-sum-of">/{routes.length}</span></div>
+          <div className="adm-sum-k">Buses running</div>
         </div>
-        {recordings.length === 0 ? (
-          <div className="empty">
-            Nothing uploaded yet.<br />
-            Whoever rides the bus records on <span className="mono">/record</span> and taps Upload.
-          </div>
-        ) : (
-          <>
-            {recordings.map((r) => (
-              <div key={r.id} className="log-row">
-                <span className="log-name">
-                  {r.name}
-                  <span style={{ display: 'block', fontSize: 11, color: 'var(--dimmer)' }}>
-                    {(r.distanceM / 1000).toFixed(1)} km · {r.fixes} fixes
-                    {r.markers > 0 && ` · ${r.markers} marked`}
-                  </span>
-                </span>
-                <span className="num" style={{ fontSize: 11.5, color: 'var(--dimmer)' }}>
-                  {r.startedAt ? new Date(r.startedAt).toLocaleDateString() : ''}
-                </span>
-                {/* A plain <a download> cannot carry the PIN header, so the
-                    file is fetched and handed to the browser as a blob. */}
-                <button className="btn" onClick={() => download(r.id)}
-                        style={{ padding: '6px 11px', fontSize: 12 }}>
-                  ↓ Download
-                </button>
-              </div>
-            ))}
-            <div className="card-body">
-              <div className="note">
-                <strong style={{ color: 'var(--warn)' }}>Download promptly.</strong> On free
-                hosting the server&apos;s disk is wiped on every redeploy, so uploads are a
-                handover point, not storage.
-              </div>
-            </div>
-          </>
-        )}
+        <div className="adm-sum">
+          <div className="adm-sum-v num">{students}</div>
+          <div className="adm-sum-k">Students</div>
+        </div>
+        <div className="adm-sum">
+          <div className="adm-sum-v num">{drivers.length}</div>
+          <div className="adm-sum-k">Drivers</div>
+        </div>
       </div>
 
-      <div className="grid" style={{ marginTop: 18 }}>
-        <div style={{ display: 'grid', gap: 18 }}>
-          {/* ---- ETA accuracy ---- */}
-          <div className="card">
-            <div className="card-head"><span className="card-title">ETA accuracy · this trip</span></div>
-            <div className="card-body">
-              {state?.accuracy.some((a) => a.n > 0) ? (
-                <div className="cmp">
-                  {state.accuracy.map((a) => (
-                    <div key={a.model} className="cmp-row" data-hero={a.model === 'profile'}
-                         data-weak={a.model === 'naive'}>
-                      <div className="cmp-label">
-                        {MODEL_LABEL[a.model] ?? a.model}
-                        <small>{MODEL_NOTE[a.model]} · {a.n} scored</small>
-                      </div>
-                      <div className="cmp-val num">{a.maeS}<span style={{ fontSize: 13 }}>s</span></div>
-                    </div>
-                  ))}
+      <div className="adm-list">
+        {routes.map((r, i) => {
+          const driver = drivers.find((d) => d.routeId === r.id);
+          const live = r.live;
+          return (
+            <Link
+              key={r.id}
+              href={`/track?route=${r.id}`}
+              prefetch={false}
+              className="card adm-card enter"
+              data-i={i + 1}
+              style={{ ['--accent' as string]: r.color, textDecoration: 'none', display: 'block' }}
+              onClick={() => haptic('tick')}
+            >
+              <div className="adm-head">
+                <span className="ti-badge" style={{ background: r.color }}>{r.code}</span>
+                <div className="ti-route-text">
+                  <div className="ti-route-name">{r.name}</div>
+                  <div className="ti-route-sub">
+                    {r.stopCount} stops · {(r.lengthM / 1000).toFixed(1)} km · starts {r.schedStart}
+                  </div>
                 </div>
+                <span className="ti-state" style={{ position: 'static' }} data-live={!!live}>
+                  <span className="ti-state-dot" />
+                  {live ? 'LIVE' : 'Idle'}
+                </span>
+              </div>
+
+              {live ? (
+                <>
+                  <div className="adm-prog">
+                    <div className="adm-prog-fill"
+                         style={{ width: `${Math.round(live.progress * 100)}%`, background: r.color }} />
+                  </div>
+                  {/* The arrival time first, because it is the only line on
+                      this card anyone acts on. */}
+                  <div className="adm-eta">
+                    {live.arrivedAt ? (
+                      <span className="adm-eta-done">
+                        Reached {live.endName ?? 'the end'} at{' '}
+                        <strong>{new Date(live.arrivedAt).toLocaleTimeString('en-IN',
+                          { hour: '2-digit', minute: '2-digit', hour12: false })}</strong>
+                      </span>
+                    ) : live.etaEndS != null ? (
+                      <>
+                        <span className="adm-eta-n num">{Math.max(0, Math.round(live.etaEndS / 60))}</span>
+                        <span className="adm-eta-u">
+                          min to {live.endName ?? 'the end'} · arriving{' '}
+                          <strong className="num">{clockIn(live.etaEndS)}</strong>
+                        </span>
+                      </>
+                    ) : (
+                      <span className="adm-eta-u">Working out the arrival time…</span>
+                    )}
+                  </div>
+                  <div className="adm-stats">
+                    {live.nextStop && <span>Next {live.nextStop}</span>}
+                    <span>{(live.distAlongM / 1000).toFixed(1)} of {(r.lengthM / 1000).toFixed(1)} km</span>
+                    <span data-late={live.delayS > 120}>{fmtDelay(live.delayS)}</span>
+                  </div>
+                </>
               ) : (
-                <div className="empty" style={{ padding: '24px 0' }}>
-                  No scored predictions yet.<br />
-                  Errors appear once the bus reaches a stop it had an ETA for.
-                </div>
+                <div className="adm-idle">Not broadcasting. {r.firstStop} → {r.lastStop}</div>
               )}
-              <div className="note" style={{ marginTop: 12 }}>
-                Mean absolute error, in seconds, over predictions made 1–20 minutes
-                ahead. Every ETA is recorded when made and scored when the bus
-                actually arrives.
-              </div>
-            </div>
-          </div>
 
-          {/* ---- ingest health ---- */}
-          <div className="card">
-            <div className="card-head"><span className="card-title">Signal health</span></div>
-            {trip ? (
-              <div className="stat-grid">
-                <div className="stat">
-                  <div className="stat-k">Last fix</div>
-                  <div className="stat-v" style={{ fontSize: 15 }}>{fmtAge(trip.ageS)}</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-k">Source</div>
-                  <div className="stat-v" style={{ fontSize: 15 }}>{trip.source}</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-k">Accepted</div>
-                  <div className="stat-v num">{trip.pingCount}</div>
-                </div>
-                <div className="stat">
-                  <div className="stat-k">Rejected</div>
-                  <div className="stat-v num" style={{ color: trip.rejectedCount ? 'var(--warn)' : undefined }}>
-                    {trip.rejectedCount}
-                  </div>
-                </div>
-                <div className="stat">
-                  <div className="stat-k">Pace now</div>
-                  <div className="stat-v num" style={{ color: trip.pace > 1.15 ? 'var(--warn)' : 'var(--live)' }}>
-                    {trip.pace.toFixed(2)}<small>×</small>
-                  </div>
-                </div>
-                <div className="stat">
-                  <div className="stat-k">Pace from</div>
-                  <div className="stat-v" style={{ fontSize: 14 }}>
-                    {trip.paceBasis === 'recent' ? 'last few min' : 'whole trip'}
-                  </div>
-                </div>
+              <div className="adm-foot">
+                <span className="adm-driver">
+                  {driver ? `${driver.name} · ${driver.phone}` : 'No driver assigned'}
+                </span>
+                <span className="adm-count">
+                  {counts[r.id] ?? 0} students
+                  <span className="adm-go" aria-hidden>›</span>
+                </span>
               </div>
-            ) : (
-              <div className="empty">This route is not reporting.</div>
-            )}
-          </div>
-        </div>
 
-        {/* ---- stop log ---- */}
-        <div className="card">
-          <div className="card-head">
-            <span className="card-title">Stop log · scheduled vs actual</span>
-            <span style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--dimmer)' }}>
-              {served.length} recorded
-            </span>
-          </div>
-          {served.length ? (
-            <div style={{ maxHeight: 520, overflowY: 'auto' }}>
-              {served.map((e) => {
-                const stop = state?.stops.find((s) => s.seq === e.seq);
-                const late = e.delayS > 120;
-                const early = e.delayS < -120;
-                return (
-                  <div key={e.stopId} className="log-row">
-                    <span className="log-name">{stop?.name ?? e.stopId}</span>
-                    <span className="num" style={{ color: 'var(--dimmer)' }}>
-                      {stop ? fmtClock(state!.trip!.startedAt + stop.schedOffsetS * 1000) : '—'}
-                    </span>
-                    <span className="num">{fmtClock(e.arrivedAt)}</span>
-                    <span className="num" style={{
-                      color: late ? 'var(--warn)' : early ? 'var(--dim)' : 'var(--live)',
-                      fontSize: 12,
-                    }}>
-                      {fmtDelay(e.delayS)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="empty">
-              No stops served yet on this trip.<br />
-              Arrivals are detected by geofence plus a near-zero speed reading.
-            </div>
-          )}
-        </div>
+              {/* Demo only — remove before this goes to the college. */}
+              <DemoRun routeId={r.id} running={!!live?.replaying} />
+            </Link>
+          );
+        })}
       </div>
+
+      {err && <div className="note">{err}</div>}
+
+      <Link href="/track" className="btn adm-wide" onClick={() => haptic('tick')}>
+        Open the live map
+      </Link>
     </div>
   );
 }
 
 export default function AdminPage() {
   return (
-    <PinGate title="Transport office">
-      <AdminPageInner />
-    </PinGate>
+    <RoleGate allow={['admin']}>
+      <AdminInner />
+    </RoleGate>
   );
 }

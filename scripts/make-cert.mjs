@@ -21,16 +21,32 @@ import os from 'node:os';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CERT_DIR = join(ROOT, '.cert');
 
+/**
+ * The addresses a phone on the same Wi-Fi could actually reach.
+ *
+ * This used to skip every 172.x address to dodge WSL and Hyper-V virtual
+ * switches. That is too blunt: 172.16-172.31 is a real private range, and on
+ * a college network the laptop's own Wi-Fi address often sits in it — so the
+ * one address that mattered was the one being thrown away, and the server
+ * reported "not connected to a network" while plainly connected.
+ *
+ * Filter by what the adapter IS, not by the number it was given. Virtual
+ * switches announce themselves in their names; APIPA addresses mean the
+ * adapter never got a lease and leads nowhere.
+ */
+const VIRTUAL = /vethernet|wsl|hyper-v|virtualbox|vmware|docker|loopback|bluetooth/i;
+
 export function lanAddresses() {
   const out = [];
-  for (const addrs of Object.values(os.networkInterfaces())) {
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+    if (VIRTUAL.test(name)) continue;
     for (const a of addrs ?? []) {
-      // Skip WSL / Hyper-V virtual switches — a phone can never reach those.
-      if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('172.')) {
-        out.push(a.address);
-      }
+      if (a.family !== 'IPv4' || a.internal) continue;
+      if (a.address.startsWith('169.254.')) continue;   // no DHCP lease
+      out.push(a.address);
     }
   }
+  // Wi-Fi first: it is the one the phone is on.
   return out;
 }
 

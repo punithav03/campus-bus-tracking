@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { checkPin, unauthorized } from '@/lib/auth';
+import { requireRoute } from '@/lib/guard';
+import { engineKey } from '@/lib/network';
+import { directionNow } from '@/lib/trip-store';
+import { ensureLive } from '@/lib/live';
 import { engine } from '@/lib/engine';
 import type { Ping, PingSource } from '@/lib/types';
 
@@ -11,7 +14,13 @@ export const dynamic = 'force-dynamic';
  * cuts request volume by an order of magnitude.
  */
 export async function POST(req: Request) {
-  if (!checkPin(req)) return unauthorized();
+  // Only a driver (or the office) may move a bus, and only his own. The route
+  // is taken from the signed session, so a posted routeId cannot redirect a
+  // batch of fixes onto somebody else's bus.
+  const g = requireRoute(req, ['driver', 'admin']);
+  if (!g.ok) return g.res;
+  await ensureLive();
+
   let body: { routeId?: string; pings?: Ping[]; source?: PingSource };
   try {
     body = await req.json();
@@ -19,9 +28,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'bad json' }, { status: 400 });
   }
 
-  const { routeId, pings, source = 'driver' } = body;
-  if (!routeId || !Array.isArray(pings) || pings.length === 0) {
-    return NextResponse.json({ error: 'routeId and pings[] required' }, { status: 400 });
+  const { pings, source = 'driver' } = body;
+  const routeId = engineKey(g.routeId!, directionNow());
+  if (!Array.isArray(pings) || pings.length === 0) {
+    return NextResponse.json({ error: 'pings[] required' }, { status: 400 });
   }
   if (pings.length > 600) {
     return NextResponse.json({ error: 'batch too large' }, { status: 413 });

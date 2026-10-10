@@ -79,11 +79,34 @@ html[data-splash="running"] .brand-mark{opacity:0}
  * screen never flashes it a second time on an in-app navigation or a reload.
  */
 const BOOT_SKIP = `try{if(sessionStorage.getItem('campusbus.splashShown')==='1')` +
-  `document.documentElement.dataset.splash='skip'}catch(e){}`;
+  `document.documentElement.dataset.splash='skip'}catch(e){}` +
+  // Theme before first paint. Applied here rather than in React because a
+  // component cannot run until after the page has already painted once, and
+  // a flash of the wrong theme at 6:40am is a torch in the face.
+  `try{var t=localStorage.getItem('campusbus.theme');` +
+  `if(t==='dark'||t==='light')document.documentElement.dataset.theme=t}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    /**
+     * suppressHydrationWarning is on <html> deliberately, and only here.
+     *
+     * BOOT_SKIP runs in <head>, before React hydrates, and sets
+     * data-splash="skip" on this element. That is the whole point of it — the
+     * decision has to be made before the first paint, or the launch screen
+     * flashes. But it means the client's <html> carries an attribute the
+     * server never rendered, and React reports that as a hydration mismatch.
+     *
+     * The mismatch is intentional and confined to one attribute on one
+     * element. React's own guidance is to suppress it exactly here rather than
+     * remove the pre-paint script. It does NOT suppress anything inside the
+     * tree, so a real mismatch in a page still surfaces.
+     */
+    <html
+      lang="en"
+      className={`${sans.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <style dangerouslySetInnerHTML={{ __html: BOOT_CSS }} />
         <script dangerouslySetInnerHTML={{ __html: BOOT_SKIP }} />

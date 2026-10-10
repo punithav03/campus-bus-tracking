@@ -40,6 +40,11 @@
   --fast: .18s;
   --med: .32s;
 
+  /* The wash behind chrome that floats over the map. Kept as raw channels so
+     the same gradient can be written once and tinted per theme — a hard-coded
+     dark scrim over a light map is a black band across the top of the screen. */
+  --scrim: 7, 10, 16;
+
   --sans: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
 }
@@ -67,7 +72,7 @@ body {
   background-attachment: fixed;
 }
 
-button, input, select { font: inherit; color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; }
 a { color: inherit; }
 
@@ -310,8 +315,14 @@ a { color: inherit; }
   align-items: center; gap: 11px; padding: 0 17px;
   transition: background var(--fast) var(--ease);
 }
-.strow:hover { background: rgba(255,255,255,.028); }
-.strow:active { background: rgba(255,255,255,.05); }
+/* Only a student picks a boarding point, so only a student's rows behave
+   like buttons. For a driver and the office this is a timetable to read —
+   and a row that highlights under the thumb is a promise that tapping it
+   does something. */
+.strow[data-pick="true"] { cursor: pointer; }
+.strow[data-pick="true"]:hover  { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.strow[data-pick="true"]:active { background: color-mix(in srgb, var(--text) 7%, transparent); }
+.strow[data-pick="false"] { cursor: default; -webkit-tap-highlight-color: transparent; }
 
 .strow-rail { position: relative; height: 100%; display: grid; place-items: center; }
 .strow-rail::before {
@@ -444,7 +455,7 @@ a { color: inherit; }
   /* White plate, navy bus — the same pairing as the app icon, so the marker
      reads as this app's bus and not as a generic orange dot. */
   background: #FFFFFF;
-  box-shadow: 0 0 0 3px var(--c), 0 0 0 5px rgba(7,10,16,.55),
+  box-shadow: 0 0 0 3px var(--c), 0 0 0 5px rgba(var(--scrim),.55),
               0 6px 18px rgba(0,0,0,.55),
               0 0 22px color-mix(in srgb, var(--c) 40%, transparent);
 }
@@ -516,13 +527,13 @@ a { color: inherit; }
   font-size: 10.5px; font-weight: 650; letter-spacing: .09em;
   text-transform: uppercase; color: var(--dimmer);
 }
-select.input, input.input {
+select.input, input.input, textarea.input {
   background: var(--bg-2); border: 1px solid var(--line); border-radius: 11px;
   padding: 11px 13px; font-size: 13.5px; width: 100%;
   appearance: none; -webkit-appearance: none;
   transition: border-color var(--fast) var(--ease);
 }
-select.input:hover, input.input:hover { border-color: var(--bg-3); }
+select.input:hover, input.input:hover, textarea.input:hover { border-color: var(--bg-3); }
 input[type='range'] { accent-color: var(--accent); width: 100%; }
 
 /* ------------------------------------------------------------------ misc */
@@ -657,7 +668,8 @@ input[type='range'] { accent-color: var(--accent); width: 100%; }
     position: fixed; top: 0; left: 0; right: 0; z-index: 30;
     margin: 0; padding: 10px 14px calc(10px + env(safe-area-inset-top));
     padding-top: max(10px, env(safe-area-inset-top));
-    background: linear-gradient(180deg, rgba(7,10,16,.94), rgba(7,10,16,.72) 70%, transparent);
+    background: linear-gradient(180deg,
+      rgba(var(--scrim), .94), rgba(var(--scrim), .72) 70%, transparent);
     border-bottom: none; backdrop-filter: blur(12px);
   }
   .shell[data-mobile="true"] .chips {
@@ -1077,7 +1089,7 @@ html, body { max-width: 100%; }
   .sheet[data-enabled="true"]::before {
     content: '';
     position: absolute; left: 0; right: 0; bottom: 100%; height: 56px;
-    background: linear-gradient(to top, rgba(7,10,16,.55), transparent);
+    background: linear-gradient(to top, rgba(var(--scrim),.55), transparent);
     pointer-events: none;
   }
 
@@ -1345,3 +1357,862 @@ html, body { max-width: 100%; }
    a while does not look as emphatic as one we have. */
 .bus-marker[data-predicted="true"] .bus-pulse { animation-duration: 3.6s; opacity: .3; }
 .bus-marker[data-predicted="true"] .bus-cone  { opacity: .75; }
+
+/* ==========================================================================
+   LOGIN
+   The first screen anyone sees, often at 6:40am in a moving bus queue. One
+   card, two fields, nothing that moves except the thing you are touching.
+   ========================================================================== */
+
+.login {
+  min-height: 100dvh; display: grid; place-items: center;
+  padding: 28px 18px calc(28px + env(safe-area-inset-bottom)); position: relative;
+}
+.login-glow {
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(620px 420px at 50% -8%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 70%),
+    radial-gradient(520px 380px at 84% 102%, rgba(56,120,255,.12), transparent 70%);
+}
+
+.login-card {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 372px;
+  display: flex; flex-direction: column; gap: 15px;
+  padding: 30px 26px 26px;
+  background: color-mix(in srgb, var(--bg-1) 86%, transparent);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  border: 1px solid var(--line); border-radius: var(--r-xl);
+  box-shadow: var(--e3);
+}
+
+.login-mark {
+  width: 56px; height: 56px; margin: 0 auto 2px;
+  display: grid; place-items: center;
+  border-radius: 17px; background: var(--bg-2); border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
+}
+.login-mark svg { width: 34px; height: 34px; }
+
+.login-title {
+  text-align: center; font-size: 21px; font-weight: 750; letter-spacing: -.03em;
+}
+.login-sub {
+  text-align: center; font-size: 12.5px; color: var(--dim); margin-top: -11px;
+}
+
+.login-field { margin-top: 2px; }
+
+.input-wrap { position: relative; display: flex; }
+.input-wrap .input { padding-right: 62px; }
+.input-action {
+  position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+  padding: 6px 9px; border-radius: 8px;
+  font-size: 11px; font-weight: 650; color: var(--dim);
+  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+.input-action:hover { color: var(--text); background: var(--bg-3); }
+
+/* Height is reserved whether or not there is a message, so the button never
+   shifts under a thumb that is already moving toward it. */
+.login-error {
+  min-height: 17px; font-size: 12px; line-height: 1.4;
+  color: var(--bad); text-align: center;
+  opacity: 0; transform: translateY(-3px);
+  transition: opacity var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.login-error[data-on="true"] { opacity: 1; transform: none; }
+
+.login-btn {
+  justify-content: center; display: flex; align-items: center; gap: 9px;
+  padding: 14px; font-size: 14.5px; border-radius: 13px;
+}
+
+.spin {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid rgba(0,0,0,.25); border-top-color: rgba(0,0,0,.75);
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.login-help {
+  text-align: center; font-size: 11.5px; line-height: 1.65; color: var(--dimmer);
+}
+.login-foot {
+  position: relative; z-index: 1;
+  margin-top: 20px; text-align: center;
+  font-size: 10.5px; color: var(--dimmer); max-width: 300px; line-height: 1.5;
+}
+
+/* ==========================================================================
+   TRANSPORT INFO  —  the home screen a student actually opens
+   ========================================================================== */
+
+.ti-hero {
+  position: relative; overflow: hidden;
+  border: 1px solid var(--line); border-radius: var(--r-lg);
+  background: var(--bg-1); box-shadow: var(--e2);
+  margin-bottom: 13px;
+}
+.ti-hero-art { position: relative; height: 132px; color: var(--text); }
+
+
+.ti-hero-body { padding: 17px 19px 19px; }
+.ti-kicker {
+  font-size: 10.5px; font-weight: 650; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--dimmer);
+}
+.ti-big {
+  font-size: 40px; font-weight: 760; letter-spacing: -.045em; line-height: 1.04;
+  margin-top: 5px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+.ti-big-sm { font-size: 26px; letter-spacing: -.03em; }
+.ti-big-at { font-size: 16px; font-weight: 600; color: var(--dim); letter-spacing: -.02em; }
+.ti-meta { margin-top: 7px; font-size: 12.5px; color: var(--dim); }
+
+.ti-state {
+  position: absolute; top: 13px; right: 13px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px 5px 8px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  background: rgba(var(--scrim),.62); backdrop-filter: blur(9px);
+  border: 1px solid var(--line); color: var(--dim);
+}
+.ti-state[data-live="true"] { color: var(--live); border-color: color-mix(in srgb, var(--live) 40%, transparent); }
+.ti-state-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ti-state[data-live="true"] .ti-state-dot { animation: livePulse 1.7s var(--ease) infinite; }
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 55%, transparent); }
+  70%      { opacity: .8; box-shadow: 0 0 0 7px transparent; }
+}
+
+.ti-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 15px 17px; border-bottom: 1px solid var(--line-soft);
+}
+.ti-row:last-child { border-bottom: none; }
+.ti-row-k { font-size: 12px; color: var(--dim); }
+.ti-row-v { font-size: 15.5px; font-weight: 650; letter-spacing: -.02em; text-align: right; }
+.ti-approx { color: var(--warn); margin-left: 5px; font-weight: 700; }
+
+.ti-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line-soft); }
+.ti-row-half { flex-direction: column; align-items: flex-start; gap: 5px; background: var(--bg-1); border-bottom: none; }
+.ti-row-half .ti-row-v { font-size: 21px; text-align: left; }
+
+.ti-track {
+  display: flex; align-items: center; gap: 11px;
+  padding: 16px 17px; border-top: 1px solid var(--line-soft);
+  font-size: 14.5px; font-weight: 650; letter-spacing: -.015em;
+  text-decoration: none; color: var(--text);
+  transition: background var(--fast) var(--ease);
+}
+.ti-track:hover { background: var(--bg-2); }
+.ti-track:active { background: var(--bg-3); }
+.ti-track-ic {
+  width: 32px; height: 32px; display: grid; place-items: center; border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 17%, transparent); color: var(--accent);
+}
+.ti-track-go { margin-left: auto; font-size: 22px; color: var(--dimmer); line-height: 1; }
+
+.ti-driver { display: flex; align-items: center; gap: 13px; padding: 15px 17px; }
+.ti-avatar {
+  width: 42px; height: 42px; border-radius: 13px; flex: none;
+  display: grid; place-items: center;
+  font-size: 17px; font-weight: 760; color: #080b11;
+}
+.ti-driver-text { min-width: 0; flex: 1; }
+.ti-driver-name { font-size: 15px; font-weight: 650; letter-spacing: -.02em; }
+.ti-driver-sub {
+  font-size: 11.5px; color: var(--dimmer); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ti-icon-btn {
+  width: 40px; height: 40px; flex: none; border-radius: 12px;
+  display: grid; place-items: center; text-decoration: none;
+  background: var(--bg-2); border: 1px solid var(--line); color: var(--text);
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.ti-icon-btn:hover { background: var(--bg-3); transform: translateY(-1px); }
+.ti-icon-btn:active { transform: scale(.94); }
+
+.ti-route { display: flex; align-items: center; gap: 13px; padding: 15px 17px; }
+.ti-badge {
+  width: 34px; height: 34px; border-radius: 11px; flex: none;
+  display: grid; place-items: center; font-size: 14px; font-weight: 760; color: #080b11;
+}
+.ti-route-name { font-size: 14.5px; font-weight: 650; letter-spacing: -.02em; }
+.ti-route-sub { font-size: 11.5px; color: var(--dimmer); margin-top: 2px; }
+
+.ti-foot {
+  margin-top: 16px; text-align: center; font-size: 11px; color: var(--dimmer);
+}
+
+/* Skeletons: the shape of the answer, so the layout never jumps when it lands */
+.ti-skeleton { display: flex; flex-direction: column; gap: 13px; }
+.sk {
+  border-radius: var(--r-lg); background: var(--bg-1);
+  position: relative; overflow: hidden;
+}
+.sk::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.045), transparent);
+  animation: shimmer 1.3s infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.sk-hero { height: 250px; }
+.sk-row { height: 128px; }
+
+@media (max-width: 420px) {
+  .ti-big { font-size: 35px; }
+  .ti-hero-art { height: 118px; }
+}
+
+/* ==========================================================================
+   DRIVER
+   Operated one-handed, in a cab, by someone who is about to drive a bus.
+   One target, and it is enormous.
+   ========================================================================== */
+
+.dv-route {
+  display: flex; align-items: center; gap: 13px;
+  padding: 16px 17px; border-bottom: 1px solid var(--line-soft);
+}
+
+.dv-action { padding: 18px 17px; display: flex; flex-direction: column; gap: 11px; }
+.dv-btn {
+  width: 100%; padding: 19px; font-size: 17px; font-weight: 700;
+  border-radius: 15px; letter-spacing: -.02em;
+}
+.dv-hint { font-size: 12px; color: var(--dim); text-align: center; }
+
+/* ==========================================================================
+   ADMIN  —  the transport office
+   ========================================================================== */
+
+.adm-summary {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+  background: var(--line-soft); border: 1px solid var(--line);
+  border-radius: var(--r-lg); overflow: hidden; margin-bottom: 13px;
+}
+.adm-sum { background: var(--bg-1); padding: 17px 16px; }
+.adm-sum-v { font-size: 27px; font-weight: 760; letter-spacing: -.04em; }
+.adm-sum-of { font-size: 15px; font-weight: 600; color: var(--dimmer); }
+.adm-sum-k {
+  font-size: 10px; font-weight: 650; letter-spacing: .09em;
+  text-transform: uppercase; color: var(--dimmer); margin-top: 5px;
+}
+
+.adm-list { display: flex; flex-direction: column; gap: 11px; }
+.adm-card { overflow: hidden; }
+
+.adm-head { display: flex; align-items: center; gap: 12px; padding: 15px 16px; }
+
+.adm-prog {
+  height: 5px; margin: 0 16px; border-radius: 3px;
+  background: var(--bg-3); overflow: hidden;
+}
+.adm-prog-fill {
+  height: 100%; border-radius: 3px;
+  transition: width 1s var(--ease-out);
+}
+
+.adm-stats {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  padding: 11px 16px 0; font-size: 12px; color: var(--dim);
+}
+.adm-stats span[data-late="true"] { color: var(--warn); font-weight: 650; }
+
+.adm-idle { padding: 4px 16px 0; font-size: 12.5px; color: var(--dimmer); }
+
+.adm-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 14px; padding: 12px 16px;
+  border-top: 1px solid var(--line-soft); background: var(--bg-2);
+  font-size: 11.5px; color: var(--dim);
+}
+.adm-count { color: var(--dimmer); white-space: nowrap; }
+.adm-driver { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.adm-wide {
+  display: block; text-align: center; margin-top: 15px;
+  padding: 14px; text-decoration: none; border-radius: 13px;
+}
+
+/* ---------------------------------------------------------- CSV import */
+
+.imp-body { padding: 16px 17px; display: flex; flex-direction: column; gap: 12px; }
+.imp-help { font-size: 12.5px; color: var(--dim); }
+.imp-fmt {
+  font-family: var(--mono); font-size: 10.5px; line-height: 1.8;
+  color: var(--dim); background: var(--bg-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-sm); padding: 11px 13px;
+  /* Wrap rather than scroll: a format example you have to drag sideways to
+     read is not an example of anything. */
+  white-space: pre-wrap; word-break: break-word;
+}
+.imp-file { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.imp-count { font-size: 12px; color: var(--dim); }
+.imp-text { font-family: var(--mono); font-size: 11.5px; line-height: 1.6; resize: vertical; }
+.imp-errs { margin: 8px 0 0 16px; display: flex; flex-direction: column; gap: 3px; }
+.imp-errs li { font-size: 11px; color: var(--dim); }
+
+/* ==========================================================================
+   CONFIRM DIALOG
+   Arrives from under the thumb, not from the top of the screen.
+   ========================================================================== */
+
+.cf-backdrop {
+  position: fixed; inset: 0; z-index: 90;
+  display: grid; place-items: center;
+  padding: 20px;
+  background: rgba(4, 6, 10, .62);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: cfFade .16s var(--ease) both;
+}
+@keyframes cfFade { from { opacity: 0; } }
+
+.cf-panel {
+  width: 100%; max-width: 356px;
+  padding: 22px 21px 18px;
+  background: var(--bg-1); border: 1px solid var(--line);
+  border-radius: var(--r-lg); box-shadow: var(--e3);
+  animation: cfRise .22s var(--ease-out) both;
+}
+@keyframes cfRise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(.97); }
+}
+
+.cf-title { font-size: 17.5px; font-weight: 700; letter-spacing: -.03em; }
+.cf-body {
+  margin-top: 9px; font-size: 13px; line-height: 1.6; color: var(--dim);
+}
+
+.cf-actions {
+  display: flex; gap: 9px; margin-top: 19px;
+}
+/* Equal widths, destructive on the right where the thumb has to travel. */
+.cf-btn { flex: 1; padding: 13px; justify-content: center; text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cf-backdrop, .cf-panel { animation: none; }
+}
+
+/* On a phone the dialog sits low, near the thumb, rather than centred. */
+@media (max-width: 480px) {
+  .cf-backdrop { align-items: end; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
+}
+
+/* The route is still on its way: say so over the map rather than leaving a
+   blank default view that reads as a broken route. */
+.map-stack { position: relative; }
+.map-loading {
+  position: absolute; z-index: 4; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; color: var(--text);
+  background: rgba(8, 11, 17, .82);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--line); box-shadow: var(--e2);
+  animation: riseIn .28s var(--ease-out) both;
+  pointer-events: none;
+}
+.map-loading-spin {
+  border-color: rgba(255,255,255,.22); border-top-color: var(--accent);
+}
+
+/* ==========================================================================
+   BOARDING POINT PICKER
+   Asked once, on the first morning. Every option shows its own times, so the
+   choice is made on the thing the student actually cares about.
+   ========================================================================== */
+
+.bp-screen {
+  min-height: 100dvh;
+  padding: 26px 18px calc(26px + env(safe-area-inset-bottom));
+  display: flex; justify-content: center;
+}
+.bp { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 15px; }
+
+.bp-head { padding-top: 10px; }
+.bp-title { font-size: 25px; font-weight: 760; letter-spacing: -.04em; line-height: 1.15; }
+.bp-sub { margin-top: 8px; font-size: 13px; line-height: 1.6; color: var(--dim); }
+
+/* Route switcher — a horizontal strip, because there are three of them, not
+   thirty, and a dropdown would hide the choice behind a tap. */
+.bp-routes {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 3px;
+  scrollbar-width: none;
+}
+.bp-routes::-webkit-scrollbar { display: none; }
+.bp-route {
+  display: inline-flex; align-items: center; gap: 8px; flex: none;
+  padding: 8px 14px 8px 8px; border-radius: 999px;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap;
+  background: var(--bg-2); border: 1px solid var(--line); color: var(--dim);
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease),
+              border-color var(--fast) var(--ease);
+}
+.bp-route[data-on="true"] {
+  color: var(--text); background: var(--bg-3);
+  border-color: color-mix(in srgb, var(--rc) 55%, transparent);
+}
+.bp-route-code {
+  width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
+  font-size: 11px; font-weight: 760; color: #080b11;
+}
+
+.bp-list {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--line-soft); border: 1px solid var(--line);
+  border-radius: var(--r-lg); overflow: hidden;
+}
+.bp-stop {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px 16px; text-align: left; background: var(--bg-1);
+  transition: background var(--fast) var(--ease);
+}
+.bp-stop:hover { background: var(--bg-2); }
+.bp-stop[data-on="true"] { background: color-mix(in srgb, var(--accent) 13%, var(--bg-1)); }
+
+.bp-dot {
+  width: 15px; height: 15px; flex: none; border-radius: 50%;
+  border: 2px solid var(--dimmer);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+.bp-stop[data-on="true"] .bp-dot {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 3.5px var(--accent);
+}
+
+.bp-stop-name {
+  flex: 1; min-width: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -.015em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bp-times {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  font-size: 13.5px; font-weight: 650; flex: none;
+}
+.bp-drop { font-size: 11px; font-weight: 500; color: var(--dimmer); }
+
+.bp-sk { height: 47px; border-radius: 0; }
+
+.bp-foot {
+  position: sticky; bottom: 0;
+  display: flex; flex-direction: column; gap: 11px;
+  padding: 14px 0 calc(6px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--bg) 62%, transparent);
+}
+.bp-summary { font-size: 12.5px; line-height: 1.6; color: var(--dim); text-align: center; }
+.bp-summary strong { color: var(--text); font-weight: 650; }
+.bp-actions { display: flex; gap: 9px; }
+.bp-btn {
+  flex: 1; padding: 15px; font-size: 15px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+}
+.bp-help { font-size: 11px; color: var(--dimmer); text-align: center; }
+
+/* Which bus you are on. A statement, not a control. */
+.bp-route-tag {
+  display: inline-flex; align-items: center; gap: 9px; align-self: flex-start;
+  padding: 7px 14px 7px 7px; border-radius: 999px;
+  background: var(--bg-2); border: 1px solid var(--line);
+}
+.bp-route-label { font-size: 12.5px; font-weight: 600; color: var(--dim); }
+
+/* Sign out: the one destructive thing on the page, coloured like it. */
+.set-signout { border-top: none; width: 100%; color: var(--bad); }
+.set-signout:hover { background: color-mix(in srgb, var(--bad) 10%, var(--bg-1)); }
+.set-signout-ic {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+  color: var(--bad);
+}
+
+.adm-card:hover { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); }
+.adm-go { margin-left: 9px; font-size: 17px; color: var(--dimmer); line-height: 1; }
+
+/* ==========================================================================
+   LIGHT THEME
+   Same tokens, re-pointed. Every component inherits it without knowing a
+   light theme exists.
+   ========================================================================== */
+
+:root[data-theme='light'] {
+  --bg:        #f4f6fa;
+  --bg-1:      #ffffff;
+  --bg-2:      #eef1f7;
+  --bg-3:      #e3e8f1;
+  --line:      #d4dae6;
+  --line-soft: #e6eaf2;
+
+  --text:      #0f1724;
+  --dim:       #4a586e;
+  --dimmer:    #78869c;
+
+  /* Darker than the dark-mode values: the same green on white has a third of
+     the contrast and reads as decoration rather than status. */
+  --live:      #0f9d4f;
+  --warn:      #b06c00;
+  --bad:       #c42f4e;
+  --accent:    #e2630a;
+
+  --scrim: 246, 248, 252;
+
+  --e1: 0 1px 2px rgba(16,32,64,.07);
+  --e2: 0 2px 6px rgba(16,32,64,.07), 0 10px 26px rgba(16,32,64,.07);
+  --e3: 0 4px 12px rgba(16,32,64,.10), 0 20px 50px rgba(16,32,64,.10);
+}
+
+:root[data-theme='light'] body {
+  background-image:
+    radial-gradient(900px 460px at 18% -12%, rgba(226,99,10,.10), transparent 68%),
+    radial-gradient(760px 420px at 92% 4%, rgba(56,120,255,.07), transparent 66%);
+}
+
+/* Badges and plates that assumed a dark page behind them. */
+:root[data-theme='light'] .map-loading { background: rgba(255,255,255,.90); }
+:root[data-theme='light'] .cf-backdrop { background: rgba(22,32,52,.38); }
+:root[data-theme='light'] .login-card { background: rgba(255,255,255,.90); }
+:root[data-theme='light'] .sk::after {
+  background: linear-gradient(90deg, transparent, rgba(16,32,64,.055), transparent);
+}
+/* These sit on a coloured chip, so they need the dark ink in both themes. */
+:root[data-theme='light'] .ti-badge,
+:root[data-theme='light'] .ti-avatar,
+:root[data-theme='light'] .bp-route-code { color: #fff; }
+:root[data-theme='light'] .btn[data-primary='true'] { color: #fff; }
+:root[data-theme='light'] .spin {
+  border-color: rgba(255,255,255,.35); border-top-color: #fff;
+}
+
+.th-row {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px;
+  padding: 4px; background: var(--bg-2); border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.th-opt {
+  padding: 9px; border-radius: 9px; font-size: 12.5px; font-weight: 600;
+  color: var(--dim); transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.th-opt[data-on='true'] { background: var(--bg-1); color: var(--text); box-shadow: var(--e1); }
+
+/* ==========================================================================
+   NOTIFICATIONS CARD
+   ========================================================================== */
+
+.nt-head { display: flex; gap: 13px; padding: 16px 17px; align-items: flex-start; }
+.nt-ic {
+  width: 38px; height: 38px; flex: none; border-radius: 12px;
+  display: grid; place-items: center;
+  background: var(--bg-2); color: var(--dim); border: 1px solid var(--line);
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+.nt-ic[data-on='true'] {
+  background: color-mix(in srgb, var(--live) 17%, transparent);
+  color: var(--live); border-color: color-mix(in srgb, var(--live) 38%, transparent);
+}
+.nt-text { min-width: 0; }
+.nt-title { font-size: 14.5px; font-weight: 650; letter-spacing: -.02em; }
+.nt-sub { margin-top: 4px; font-size: 12px; line-height: 1.55; color: var(--dim); }
+
+.nt-lead {
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 0 17px 14px;
+}
+.nt-hint { font-size: 11px; color: var(--dimmer); }
+.nt-foot { padding: 0 17px 16px; }
+.nt-foot .btn { width: 100%; padding: 13px; justify-content: center; }
+
+/* ==========================================================================
+   I'M AT THE STOP
+   ========================================================================== */
+
+.wt {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 14px 17px; border-top: 1px solid var(--line-soft);
+  transition: background var(--fast) var(--ease);
+}
+.wt:hover { background: var(--bg-2); }
+.wt[data-on='true'] { background: color-mix(in srgb, var(--live) 11%, transparent); }
+.wt-ic {
+  width: 32px; height: 32px; flex: none; border-radius: 10px;
+  display: grid; place-items: center;
+  background: var(--bg-2); color: var(--dim);
+}
+.wt[data-on='true'] .wt-ic {
+  background: color-mix(in srgb, var(--live) 18%, transparent); color: var(--live);
+}
+.wt-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wt-title { font-size: 14px; font-weight: 650; letter-spacing: -.015em; }
+.wt[data-on='true'] .wt-title { color: var(--live); }
+.wt-sub { font-size: 11.5px; line-height: 1.45; color: var(--dimmer); }
+
+/* driver side */
+.wp-list { display: flex; flex-direction: column; gap: 1px; background: var(--line-soft); }
+.wp-row {
+  display: flex; align-items: center; gap: 13px;
+  padding: 12px 17px; background: var(--bg-1);
+}
+.wp-n {
+  min-width: 30px; height: 30px; border-radius: 9px; flex: none;
+  display: grid; place-items: center;
+  font-size: 14px; font-weight: 760; color: #080b11;
+  background: var(--live);
+}
+.wp-name { font-size: 14px; font-weight: 600; }
+.wp-foot { padding: 12px 17px; font-size: 11px; color: var(--dimmer); }
+
+/* ==========================================================================
+   ADMIN ALERTS
+   ========================================================================== */
+
+.alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 13px; }
+.alert {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px 15px; border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--warn) 13%, var(--bg-1));
+  border: 1px solid color-mix(in srgb, var(--warn) 34%, transparent);
+  color: var(--text);
+  animation: riseIn .3s var(--ease-out) both;
+}
+.alert[data-sev='bad'] {
+  background: color-mix(in srgb, var(--bad) 13%, var(--bg-1));
+  border-color: color-mix(in srgb, var(--bad) 36%, transparent);
+}
+.alert-ic { flex: none; color: var(--warn); display: grid; place-items: center; }
+.alert[data-sev='bad'] .alert-ic { color: var(--bad); }
+.alert-msg { flex: 1; font-size: 12.5px; line-height: 1.5; font-weight: 550; }
+.alert-age { flex: none; font-size: 11px; color: var(--dimmer); }
+
+/* ==========================================================================
+   END-OF-TRIP SUMMARY
+   ========================================================================== */
+
+.ts { text-align: center; }
+.ts-tick {
+  width: 54px; height: 54px; margin: 0 auto 12px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--live) 17%, transparent); color: var(--live);
+  animation: tickPop .42s var(--ease-out) both;
+}
+@keyframes tickPop {
+  from { opacity: 0; transform: scale(.72); }
+  60%  { transform: scale(1.06); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.ts-title { text-align: center; }
+.ts-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+  margin: 17px 0 13px; background: var(--line-soft);
+  border: 1px solid var(--line); border-radius: var(--r); overflow: hidden;
+}
+.ts-cell { background: var(--bg-2); padding: 13px 8px; }
+.ts-v { font-size: 21px; font-weight: 760; letter-spacing: -.035em; }
+.ts-k {
+  font-size: 9.5px; font-weight: 650; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--dimmer); margin-top: 4px;
+}
+.ts-line { font-size: 12.5px; color: var(--dim); }
+
+/* ==========================================================================
+   LAST KNOWN POSITION (offline / signal lost)
+   ========================================================================== */
+
+.lk {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px 15px; margin-bottom: 11px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--warn) 11%, var(--bg-1));
+  border-left: 2px solid var(--warn);
+}
+.lk-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--warn);
+}
+.lk-text { font-size: 12px; line-height: 1.55; color: var(--dim); }
+.lk-text strong { color: var(--text); font-weight: 650; }
+
+/* ==========================================================================
+   BUS ARTWORK  —  themed, and honest about motion
+   ========================================================================== */
+
+:root {
+  --bus-shell:  #f2f6fd;
+  --bus-stroke: transparent;
+  --bus-glass:  #131a26;
+  --bus-road:   rgba(255,255,255,.10);
+  --bus-dash:   rgba(255,255,255,.30);
+  --bus-hill:   rgba(255,255,255,.07);
+  --bus-tyre:   #11161f;
+  --bus-hub:    #4b5768;
+  --bus-shadow: rgba(0,0,0,.30);
+}
+
+/* A white bus on a pale sky is an empty box, which is what the light theme
+   used to show. Flip it: dark body, bright glass, and a visible road. */
+:root[data-theme='light'] {
+  --bus-shell:  #1d2b45;
+  --bus-stroke: rgba(13,22,38,.14);
+  --bus-glass:  #cfe0f7;
+  --bus-road:   rgba(20,34,58,.10);
+  --bus-dash:   rgba(20,34,58,.26);
+  --bus-hill:   rgba(20,34,58,.09);
+  --bus-tyre:   #0f1724;
+  --bus-hub:    #8a99b0;
+  --bus-shadow: rgba(20,34,58,.18);
+}
+
+.bus-art { display: block; width: 100%; height: 100%; }
+
+.bus-art-hills path { fill: var(--bus-hill); }
+.bus-art-road   { fill: var(--bus-road); }
+.bus-art-dashes rect { fill: var(--bus-dash); }
+.bus-art-shell  { fill: var(--bus-shell); stroke: var(--bus-stroke); stroke-width: 1; }
+.bus-art-win    { fill: var(--bus-glass); opacity: .92; }
+.bus-art-door   { fill: var(--bus-glass); opacity: .72; }
+.bus-art-lamp   { fill: #ffd166; }
+.bus-art-tail   { fill: #f0506e; opacity: .9; }
+.bus-art-tyre   { fill: var(--bus-tyre); }
+.bus-art-hub    { fill: var(--bus-hub); }
+.bus-art-shadow { fill: var(--bus-shadow); }
+
+/* ---- motion only when a bus is actually out there --------------------- */
+
+/* Parked. The road is still, the bus sits down on its shadow, and the whole
+   picture reads as "nothing is running" before a word has been read. */
+.bus-art[data-moving='false'] .bus-art-body { transform: translateY(0); }
+.bus-art[data-moving='false'] .bus-art-shadow { opacity: .55; }
+.bus-art[data-moving='false'] .bus-art-dashes { opacity: .55; }
+
+.bus-art-dashes,
+.bus-art-body,
+.bus-art-shadow {
+  transition: opacity .5s var(--ease), transform .5s var(--ease);
+}
+
+.bus-art[data-moving='true'] .bus-art-dashes {
+  animation: roadRun var(--road-dur, 1.9s) linear infinite;
+}
+@keyframes roadRun { to { transform: translateX(-48px); } }
+
+.bus-art[data-moving='true'] .bus-art-body {
+  animation: busIdle 3.4s var(--ease) infinite;
+  transform-origin: 160px 98px;
+}
+@keyframes busIdle {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-1.7px); }
+}
+
+/* Wheels only turn when the bus does. A spinning hub under a parked bus is
+   the same lie as a scrolling road. */
+.bus-art[data-moving='true'] .bus-art-wheel {
+  animation: wheelSpin var(--road-dur, 1.9s) linear infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+@keyframes wheelSpin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .bus-art-dashes, .bus-art-body, .bus-art-wheel { animation: none !important; }
+}
+
+/* The college crest, signing the login screen off.
+   Printed artwork in dark red and navy, so on a dark page it needs a light
+   plate behind it or the linework simply disappears. */
+.login-org {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 22px; max-width: 340px;
+}
+.login-crest {
+  width: 44px; height: 44px; flex: none;
+  object-fit: contain; border-radius: 50%;
+  background: #fff; padding: 4px;
+  box-shadow: 0 0 0 1px var(--line);
+}
+.login-org-text {
+  font-size: 10.5px; line-height: 1.5; color: var(--dimmer);
+}
+.login-org-text strong {
+  display: block; font-size: 11px; font-weight: 600; color: var(--dim);
+  margin-bottom: 1px;
+}
+.about-crest {
+  width: 54px; height: 54px; object-fit: contain; border-radius: 50%;
+  background: #fff; padding: 5px; flex: none;
+}
+
+/* ---------------------------------------------------------- demo run
+   Labelled, and visually set apart from everything real on the page. Remove
+   this block along with the component when demo mode goes. */
+.dr {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  padding: 10px 16px; border-top: 1px dashed var(--line);
+  background: color-mix(in srgb, var(--bg-3) 55%, transparent);
+}
+.dr-tag {
+  font-size: 9px; font-weight: 750; letter-spacing: .12em;
+  color: var(--dimmer); border: 1px solid var(--line);
+  padding: 3px 6px; border-radius: 5px;
+}
+.dr-btn {
+  padding: 7px 12px; border-radius: 9px;
+  font-size: 11.5px; font-weight: 650;
+  background: var(--bg-2); border: 1px solid var(--line); color: var(--text);
+  transition: background var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.dr-btn:hover { background: var(--bg-3); }
+.dr-btn:active { transform: scale(.96); }
+.dr-btn:disabled { opacity: .45; }
+.dr-fast { color: var(--dim); }
+.dr-btn[data-stop="true"] {
+  color: var(--bad);
+  border-color: color-mix(in srgb, var(--bad) 42%, transparent);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+}
+.dr-err { font-size: 11px; color: var(--bad); }
+
+/* The hero number is a white-to-accent gradient, which on a pale card is
+   white-on-white — the biggest thing on the screen became the least legible.
+   Flip the gradient to run from the ink colour into the accent. */
+:root[data-theme='light'] .hero-num {
+  background: linear-gradient(175deg, var(--text), color-mix(in srgb, var(--accent) 78%, #000));
+  -webkit-background-clip: text; background-clip: text;
+}
+:root[data-theme='light'] .hero-kicker { color: color-mix(in srgb, var(--accent) 86%, #000); }
+:root[data-theme='light'] .ti-state { background: rgba(255,255,255,.92); }
+
+/* "next Palamangalam" was running off the edge: nowrap on a long Telugu
+   village name has nowhere to go. Let it wrap and keep the number intact. */
+.hero-unit { white-space: normal; text-wrap: balance; }
+.hero-figure { min-width: 0; flex-wrap: wrap; }
+
+/* The sign-off sits under the card, centred with it rather than drifting to
+   the left edge of a wide screen. */
+.login-org { margin-left: auto; margin-right: auto; }
+.login-org-text { text-align: left; }
+
+/* A range track inherits a dark default that looks like a bar of ink on a
+   pale page. Paint it explicitly in both themes. */
+:root[data-theme='light'] input[type='range'] {
+  accent-color: var(--accent);
+  background: transparent;
+}
+:root[data-theme='light'] input[type='range']::-webkit-slider-runnable-track {
+  background: var(--bg-3); height: 5px; border-radius: 3px;
+}
+:root[data-theme='light'] input[type='range']::-moz-range-track {
+  background: var(--bg-3); height: 5px; border-radius: 3px;
+}
+
+/* The arrival time, which is the only line on a fleet card anyone acts on. */
+.adm-eta {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 12px 16px 0;
+}
+.adm-eta-n { font-size: 27px; font-weight: 760; letter-spacing: -.04em; }
+.adm-eta-u { font-size: 12.5px; color: var(--dim); }
+.adm-eta-u strong { color: var(--text); font-weight: 650; }
+.adm-eta-done { font-size: 13px; color: var(--live); }
+.adm-eta-done strong { font-weight: 700; }

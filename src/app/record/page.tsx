@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TopBar } from '@/components/TopBar';
-import { PinGate } from '@/components/PinGate';
-import { authFetch } from '@/lib/client-auth';
+import { RoleGate } from '@/components/RoleGate';
 import { haptic } from '@/lib/device';
 import { fmtClock } from '@/lib/format';
+import { apiFetch } from '@/lib/api';
 import {
   addMarker, appendFixes, createSession, deleteSession, deleteMarker, exportSession,
   listMarkers, renameMarker, type StoredMarker,
@@ -290,7 +290,7 @@ function RecordPageInner() {
     setSent((m) => ({ ...m, [s.id]: 'sending' }));
     try {
       const data = await exportSession(s.id);
-      const res = await authFetch('/api/recording', {
+      const res = await apiFetch('/api/recording', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(data),
@@ -523,8 +523,8 @@ function RecordPageInner() {
 
 export default function RecordPage() {
   return (
-    <PinGate title="Route recorder">
+    <RoleGate allow={['driver', 'admin']}>
       <RecordPageInner />
-    </PinGate>
+    </RoleGate>
   );
 }

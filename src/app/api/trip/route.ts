@@ -1,47 +1,116 @@
 import { NextResponse } from 'next/server';
-import { checkPin, unauthorized } from '@/lib/auth';
+import { requireRoute } from '@/lib/guard';
 import { engine } from '@/lib/engine';
-import { getReferenceTrip, getRoute } from '@/lib/network';
+import { getRoute, engineKey } from '@/lib/network';
+import { openTrip, closeTrip, directionNow, type Direction } from '@/lib/trip-store';
+import { demoTrace } from '@/lib/demo-run';
+import { ensureLive } from '@/lib/live';
+import { one } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
-/** Start / end a live trip, or drive one from the recorded reference trace. */
+/**
+ * Start or end a run.
+ *
+ * The DIRECTION is decided by the clock, not asked of the driver. He does the
+ * same job twice a day and making him classify it is a question whose wrong
+ * answer sends every student to the wrong side of the route. Anything from
+ * midday on is the run home.
+ */
 export async function POST(req: Request) {
-  if (!checkPin(req)) return unauthorized();
-  let body: { routeId?: string; action?: string; speed?: number };
-  try {
-    body = await req.json();
-  } catch {
-    // A truncated request from a phone on a flaky signal is a client problem,
-    // not a server fault. 400 says so; a 500 would send us hunting a bug.
+  const g = requireRoute(req, ['driver', 'admin']);
+  if (!g.ok) return g.res;
+  await ensureLive();
+
+  let body: { action?: string; speed?: number; direction?: Direction };
+  try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'malformed request body' }, { status: 400 });
   }
-  const { routeId, speed = 10 } = body ?? {};
+
+  const routeId = g.routeId!;
+  const { speed = 10 } = body ?? {};
   const action = body?.action as 'start' | 'end' | 'replay' | 'stop-replay' | undefined;
 
-  if (!routeId || !getRoute(routeId)) {
+  if ((action === 'replay' || action === 'stop-replay') && g.session.role !== 'admin') {
+    return NextResponse.json({ error: 'Not allowed.' }, { status: 403 });
+  }
+  // An admin may force a direction when testing; a driver never can.
+  const direction: Direction = (g.session.role === 'admin' && body?.direction)
+    ? body.direction
+    : directionNow();
+  const key = engineKey(routeId, direction);
+
+  if (!getRoute(key)) {
     return NextResponse.json({ error: 'unknown route' }, { status: 404 });
   }
 
   switch (action) {
-    case 'start':
-      engine.start(routeId);
-      return NextResponse.json({ ok: true, status: 'started' });
-
-    case 'end':
-      engine.end(routeId);
-      return NextResponse.json({ ok: true, status: 'ended' });
-
-    case 'replay': {
-      const ref = getReferenceTrip(routeId);
-      if (!ref) return NextResponse.json({ error: 'no reference trip' }, { status: 404 });
-      engine.startReplay(routeId, ref.points, Math.max(1, Math.min(60, speed)));
-      return NextResponse.json({ ok: true, status: 'replaying', speed, points: ref.points.length });
+    case 'start': {
+      const driverId = g.session.role === 'driver' ? g.session.sub : null;
+      // The database row comes first and owns the id, so a restart can find
+      // this trip again. The engine is the fast copy, not the record.
+      const row = await openTrip(routeId, direction, driverId, key);
+      const trip = engine.start(key);
+      trip.id = String(row.id);
+      return NextResponse.json({ ok: true, status: 'started', direction, tripId: row.id });
     }
 
-    case 'stop-replay':
-      engine.stopReplay(routeId);
+    case 'end': {
+      const view = engine.view(key);
+      const id = Number(view?.trip?.id);
+      engine.end(key);
+      if (Number.isFinite(id)) await closeTrip(id, 'finished');
+
+      // What the driver sees when he stops: not a blank screen, a run.
+      const summary = Number.isFinite(id)
+        ? await one<{ stops: string; first: string | null; last: string | null; avg: string | null }>(
+            `SELECT count(*) AS stops,
+                    min(reached_at)::text AS first,
+                    max(reached_at)::text AS last,
+                    round(avg(delay_s))::text AS avg
+               FROM stop_events WHERE trip_id = $1`, [id])
+        : null;
+
+      return NextResponse.json({
+        ok: true,
+        status: 'ended',
+        summary: summary && Number(summary.stops) > 0 ? {
+          stops: Number(summary.stops),
+          startedAt: summary.first,
+          endedAt: summary.last,
+          avgDelayS: summary.avg == null ? null : Number(summary.avg),
+        } : null,
+      });
+    }
+
+    // ---- demo run ------------------------------------------------------
+    // Showing this app has a chicken-and-egg problem: the thing worth showing
+    // is a bus moving, and there is no bus in a meeting room. Route 1 replays
+    // a real recorded ride; the others drive their own road line at the
+    // timetable's pace. Office only, and it says which kind it is.
+    case 'replay': {
+      const trace = demoTrace(key);
+      if (!trace) return NextResponse.json({ error: 'no route to replay' }, { status: 404 });
+      engine.startReplay(key, trace.points, Math.max(1, Math.min(120, speed)));
+      return NextResponse.json({
+        ok: true, status: 'replaying', speed,
+        points: trace.points.length, source: trace.source, direction,
+      });
+    }
+
+    case 'stop-replay': {
+      // Stopping the feed is not the same as ending the run. Left as it was,
+      // the trip stayed open with its last position frozen, so the fleet
+      // screen kept saying LIVE next to a bus that had not moved in ten
+      // minutes — and offered to start a demo on it at the same time.
+      engine.stopReplay(key);
+      const v = engine.view(key);
+      const id = Number(v?.trip?.id);
+      engine.end(key);
+      if (Number.isFinite(id)) await closeTrip(id, 'abandoned');
       return NextResponse.json({ ok: true, status: 'stopped' });
+    }
 
     default:
       return NextResponse.json({ error: 'unknown action' }, { status: 400 });
