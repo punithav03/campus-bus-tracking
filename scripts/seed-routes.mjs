@@ -37,7 +37,7 @@ const ROUTE_2 = {
   code: '2',
   name: 'Kaluru — Campus',
   short: 'Kaluru Line',
-  color: '#f5b301',
+  color: '#3fc87a',
   driver: { name: 'Eswar', phone: '8686288604' },
   stops: [
     ['Kaluru',           '07:20', 13.602890, 79.343600, 'osm'],
