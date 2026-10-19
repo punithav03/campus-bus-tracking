@@ -11,7 +11,7 @@ const DIR = join(process.cwd(), 'data', 'recordings');
 const safe = (id: string) => /^[a-zA-Z0-9_-]+$/.test(id);
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  { const g = requireSession(req, ['driver', 'admin']); if (!g.ok) return g.res; }
+  { const g = await requireSession(req, ['driver', 'admin']); if (!g.ok) return g.res; }
   const { id } = await params;
   if (!safe(id)) return NextResponse.json({ error: 'bad id' }, { status: 400 });
   try {
@@ -29,7 +29,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  { const g = requireSession(req, ['driver', 'admin']); if (!g.ok) return g.res; }
+  { const g = await requireSession(req, ['driver', 'admin']); if (!g.ok) return g.res; }
   const { id } = await params;
   if (!safe(id)) return NextResponse.json({ error: 'bad id' }, { status: 400 });
   try {

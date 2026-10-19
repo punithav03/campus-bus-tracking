@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   // Only a driver (or the office) may move a bus, and only his own. The route
   // is taken from the signed session, so a posted routeId cannot redirect a
   // batch of fixes onto somebody else's bus.
-  const g = requireRoute(req, ['driver', 'admin']);
+  const g = await requireRoute(req, ['driver', 'admin']);
   if (!g.ok) return g.res;
   await ensureLive();
 

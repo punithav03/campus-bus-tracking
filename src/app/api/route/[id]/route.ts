@@ -14,11 +14,11 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const g = requireSession(req);
+  const g = await requireSession(req);
   if (!g.ok) return g.res;
 
   const { id } = await params;
-  if (g.session.role !== 'admin' && id !== g.session.routeId) {
+  if (g.session.role !== 'admin' && id !== g.routeId) {
     return NextResponse.json({ error: 'Not allowed.' }, { status: 403 });
   }
 

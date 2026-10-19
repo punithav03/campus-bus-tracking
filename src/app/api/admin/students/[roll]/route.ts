@@ -17,7 +17,7 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ roll: string }> },
 ) {
-  const g = requireSession(req, ['admin']);
+  const g = await requireSession(req, ['admin']);
   if (!g.ok) return g.res;
 
   const { roll } = await params;

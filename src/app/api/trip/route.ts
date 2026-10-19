@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
 
 /** Start or end a run. One route, one direction: village to campus. */
 export async function POST(req: Request) {
-  const g = requireRoute(req, ['driver', 'admin']);
+  const g = await requireRoute(req, ['driver', 'admin']);
   if (!g.ok) return g.res;
   await ensureLive();
 

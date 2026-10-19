@@ -72,6 +72,9 @@ function HomeInner() {
     const load = async () => {
       try {
         const r = await fetch('/api/me/transport', { cache: 'no-store' });
+        // Signed out, or the account was changed by the office: sign in again
+        // rather than showing "could not reach the server" forever.
+        if (r.status === 401) { router.replace('/login'); return; }
         if (!r.ok) throw new Error(String(r.status));
         const j = (await r.json()) as Transport;
         if (!alive) return;

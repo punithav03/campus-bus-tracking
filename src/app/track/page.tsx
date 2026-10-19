@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { getRoute, getNetwork } from '@/lib/network';
+import { currentRouteId } from '@/lib/guard';
 import { routeColorFor } from '@/lib/brand';
 import { TrackClient } from './TrackClient';
 
@@ -43,7 +44,9 @@ export default async function TrackPage({
   const asked = (await searchParams)?.route;
   const routeId = session.role === 'admin'
     ? (net.routes.some((r) => r.id === asked) ? asked! : net.routes[0]?.id ?? null)
-    : session.routeId;
+    : await currentRouteId(session);
+  // Removed or deactivated since signing in: sign in again.
+  if (routeId === undefined) redirect('/login');
   const route = routeId ? getRoute(routeId) : null;
 
   // cum and profile are server-side engine internals — hundreds of kilobytes

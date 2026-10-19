@@ -122,7 +122,10 @@ export function TrackClient({
       const raw = localStorage.getItem('campusbus.prefs');
       if (raw) {
         const p = JSON.parse(raw);
-        if (p.routeId) setRouteId(p.routeId);
+        // Only the office switches buses, and only to one that still exists:
+        // a bus remembered from before the routes were rebuilt ("route-1")
+        // would otherwise be asked for forever.
+        if (p.routeId && !initialRoute) setRouteId(p.routeId);
         // NOT p.myStopId. The boarding point lives on the student's record
         // now — chosen at first sign-in, changeable in Settings — and a
         // leftover copy on one device would quietly override it, so this
@@ -148,7 +151,8 @@ export function TrackClient({
       setErr(null);
       setCampus(j.campus);
       setRoutes(j.routes);
-      setRouteId((cur) => cur ?? j.routes[0]?.id ?? null);
+      setRouteId((cur) => (cur && j.routes.some((r: { id: string }) => r.id === cur)
+        ? cur : j.routes[0]?.id ?? null));
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -238,6 +242,10 @@ export function TrackClient({
         // rather than whenever the old entry happens to expire.
         const r = await fetch(`/api/route/${routeId}`, { cache: 'no-store' });
         if (dead) return;
+        // Signed out, or the account changed: start again rather than retry.
+        if (r.status === 401) { location.href = '/login'; return; }
+        // Not this account's bus (any more): let the network list pick the right one.
+        if (r.status === 403 || r.status === 404) { setRouteId(null); void loadNetwork(); return; }
         if (!r.ok) throw new Error('route ' + r.status);
         const j = await r.json();
         if (dead || !j?.shape?.length) throw new Error('empty route');
@@ -301,6 +309,7 @@ export function TrackClient({
     const tick = async () => {
       try {
         const r = await fetch(`/api/state?route=${routeId}`, { cache: 'no-store' });
+        if (r.status === 401) { location.href = '/login'; return; }
         const j = await r.json();
         if (dead || j.error) return;
         setState(j);

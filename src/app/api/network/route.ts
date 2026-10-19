@@ -15,14 +15,14 @@ export const runtime = 'nodejs';
  * positions are not sitting in a response waiting to be found in devtools.
  */
 export async function GET(req: Request) {
-  const g = requireSession(req);
+  const g = await requireSession(req);
   if (!g.ok) return g.res;
 
   try {
     const net = getNetwork();
     const mine = g.session.role === 'admin'
       ? net.routes
-      : net.routes.filter((r) => r.id === g.session.routeId);
+      : net.routes.filter((r) => r.id === g.routeId);
 
     const routes = mine.map((r) => {
       const view = engine.view(r.id);

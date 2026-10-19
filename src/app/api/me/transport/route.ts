@@ -35,9 +35,10 @@ function clockPlus(start: string, offsetS: number): string {
 }
 
 export async function GET(req: Request) {
-  const g = requireSession(req);
+  const g = await requireSession(req);
   if (!g.ok) return g.res;
-  const { session } = g;
+  // The bus they are on now (from the database), not the one in their cookie.
+  const session = { ...g.session, routeId: g.routeId };
 
   if (session.role === 'admin') {
     return NextResponse.json({ role: 'admin' }, { headers: { 'Cache-Control': 'no-store' } });

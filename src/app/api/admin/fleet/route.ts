@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 
 /** Drivers and student counts, for the transport office only. */
 export async function GET(req: Request) {
-  const g = requireSession(req, ['admin']);
+  const g = await requireSession(req, ['admin']);
   if (!g.ok) return g.res;
 
   const drivers = await sql<{ id: string; name: string; phone: string; route_id: string | null }>(

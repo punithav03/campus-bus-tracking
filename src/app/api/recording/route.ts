@@ -26,7 +26,7 @@ interface Trace {
  * the laptop collects it later from /admin.
  */
 export async function POST(req: Request) {
-  { const g = requireSession(req, ['driver', 'admin']); if (!g.ok) return g.res; }
+  { const g = await requireSession(req, ['driver', 'admin']); if (!g.ok) return g.res; }
   const raw = await req.text();
   if (raw.length > MAX_BYTES) {
     return NextResponse.json({ error: 'recording too large' }, { status: 413 });
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
 /** What has been uploaded so far — powers the list on /admin. */
 export async function GET(req: Request) {
-  { const g = requireSession(req, ['driver', 'admin']); if (!g.ok) return g.res; }
+  { const g = await requireSession(req, ['driver', 'admin']); if (!g.ok) return g.res; }
   try {
     await mkdir(DIR, { recursive: true });
     const files = (await readdir(DIR)).filter((f) => f.endsWith('.json'));

@@ -18,7 +18,7 @@ export const runtime = 'nodejs';
  * lie. The driver sees "3 waiting at Pudi Gate", never who.
  */
 export async function POST(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
 
   const me = await one<{ route_id: string | null; stop_id: string | null }>(
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
   await sql('DELETE FROM waiting WHERE roll_no = $1', [g.session.sub]);
   return NextResponse.json({ ok: true });
@@ -45,7 +45,7 @@ export async function DELETE(req: Request) {
 
 /** Am I currently marked as waiting? */
 export async function GET(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
   const row = await one<{ at: string }>(
     `SELECT at FROM waiting WHERE roll_no = $1 AND at > now() - interval '45 minutes'`,

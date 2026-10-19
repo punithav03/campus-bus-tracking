@@ -636,7 +636,17 @@ export function MapView({
     let cancelled = false;
     let styleTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('campusbus.mapstyle') : null;
+    // Once per device: a style picked before we had our own map (usually the
+    // old default, Liberty) is dropped, so everyone lands on the SVPCET map —
+    // it works offline and does not depend on anyone else's tile server.
+    try {
+      if (localStorage.getItem('campusbus.mapstyle.v') !== '2') {
+        localStorage.removeItem('campusbus.mapstyle');
+        localStorage.setItem('campusbus.mapstyle.v', '2');
+      }
+    } catch { /* private mode */ }
+    let saved: string | null = null;
+    try { saved = localStorage.getItem('campusbus.mapstyle'); } catch { /* private mode */ }
     const initial = styleDef(saved ?? DEFAULT_STYLE);
     if (initial.id !== DEFAULT_STYLE) { setStyleId(initial.id); styleRef.current = initial.id; }
 

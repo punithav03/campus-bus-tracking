@@ -11,7 +11,7 @@ export const runtime = 'nodejs';
  * Rate-limited by nature of being a button; the push services throttle abuse.
  */
 export async function POST(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
   const me = await one<{ route: string | null; stop: string | null }>(
     `SELECT r.name AS route, s.name AS stop

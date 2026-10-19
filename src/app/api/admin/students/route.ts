@@ -28,7 +28,7 @@ export const runtime = 'nodejs';
 interface Row { rollNo: string; name: string; routeId: string; stopId: string }
 
 export async function POST(req: Request) {
-  const g = requireSession(req, ['admin']);
+  const g = await requireSession(req, ['admin']);
   if (!g.ok) return g.res;
 
   let csv = '';

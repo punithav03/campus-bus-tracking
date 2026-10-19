@@ -15,7 +15,7 @@ export const runtime = 'nodejs';
  * nothing — there is no other bus to ask for. Only an admin may name one.
  */
 export async function GET(req: Request) {
-  const g = requireRoute(req);
+  const g = await requireRoute(req);
   if (!g.ok) return g.res;
   await ensureLive();
 

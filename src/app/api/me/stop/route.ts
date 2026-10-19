@@ -33,10 +33,10 @@ function clockPlus(start: string, offsetS: number): string {
  * consequence of the choice rather than a bare list of village names.
  */
 export async function GET(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
 
-  const routeId = g.session.routeId;
+  const routeId = g.routeId;
   if (!routeId) return NextResponse.json({ stops: [] });
 
   const route = await one<{ code: string; name: string; color: string; sched_start: string }>(
@@ -78,10 +78,10 @@ export async function GET(req: Request) {
  * payload that moves a student to another bus.
  */
 export async function POST(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
 
-  const routeId = g.session.routeId;
+  const routeId = g.routeId;
   if (!routeId) {
     return NextResponse.json(
       { error: 'No bus route is assigned to your account — contact the transport office.' },

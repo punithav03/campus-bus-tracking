@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 
 /** Is push available, and is this device already signed up? */
 export async function GET(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
   void ensureLive();
 
@@ -36,7 +36,7 @@ export async function GET(req: Request) {
  * happens when a browser rotates them.
  */
 export async function POST(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
 
   let body: { endpoint?: string; keys?: { p256dh?: string; auth?: string }; leadMin?: number };
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
 
 /** Turning them off, for this device or all of them. */
 export async function DELETE(req: Request) {
-  const g = requireSession(req, ['student']);
+  const g = await requireSession(req, ['student']);
   if (!g.ok) return g.res;
 
   let endpoint: string | null = null;

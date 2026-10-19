@@ -19,7 +19,7 @@ export const runtime = 'nodejs';
  * Route from the session, never the query string — same rule as /api/state.
  */
 export async function GET(req: Request) {
-  const g = requireRoute(req);
+  const g = await requireRoute(req);
   if (!g.ok) return g.res;
   await ensureLive();
 

@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
  * them to decide whether to pull in.
  */
 export async function GET(req: Request) {
-  const g = requireRoute(req, ['driver', 'admin']);
+  const g = await requireRoute(req, ['driver', 'admin']);
   if (!g.ok) return g.res;
 
   const rows = await sql<{ stop_id: string; name: string; n: string; seq: number }>(
