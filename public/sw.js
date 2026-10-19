@@ -23,7 +23,7 @@
  *  · /api is never cached. A stale bus position is worse than none.
  */
 
-const CACHE = 'campusbus-v9';
+const CACHE = 'campusbus-v10';
 // The basemap lives in its own cache: 12 MB that must survive app updates,
 // replaced only when a new map file (a new name) ships.
 const MAP_CACHE = 'campusbus-map';
@@ -238,6 +238,23 @@ self.addEventListener('notificationclick', (event) => {
     }
     return self.clients.openWindow(url);
   })());
+});
+
+/**
+ * The student swiped the bus card away. Fired only for a person dismissing it
+ * (not when a newer card replaces it, and not when they tap it). Tell the
+ * server, so the countdown stops and only "arriving" and "reached the college"
+ * come back.
+ */
+self.addEventListener('notificationclose', (event) => {
+  const tag = event.notification.tag || '';
+  if (!/^bus-\d+$/.test(tag)) return;
+  event.waitUntil(fetch('/api/push/dismiss', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ tag }),
+  }).catch(() => {}));
 });
 
 /**

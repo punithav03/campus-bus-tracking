@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { requireSession } from '@/lib/guard';
-import { pushConfigured } from '@/lib/push';
+import { pushConfigured, pushProblem, vapidPublicKey } from '@/lib/push';
 import { ensureLive } from '@/lib/live';
 
 export const dynamic = 'force-dynamic';
@@ -13,13 +13,22 @@ export async function GET(req: Request) {
   if (!g.ok) return g.res;
   void ensureLive();
 
-  const rows = await sql<{ endpoint: string; lead_min: number }>(
-    'SELECT endpoint, lead_min FROM push_subscriptions WHERE roll_no = $1', [g.session.sub],
-  );
+  let rows: { endpoint: string; lead_min: number }[] = [];
+  try {
+    rows = await sql<{ endpoint: string; lead_min: number }>(
+      'SELECT endpoint, lead_min FROM push_subscriptions WHERE roll_no = $1', [g.session.sub],
+    );
+  } catch (e) {
+    // Never a bare 500: the card would vanish with no explanation.
+    console.error('[push] GET:', (e as Error).message);
+    return NextResponse.json({ available: false, problem: 'The server could not read notification settings.' },
+      { headers: { 'Cache-Control': 'no-store' } });
+  }
   return NextResponse.json(
     {
       available: pushConfigured(),
-      publicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null,
+      problem: pushProblem(),
+      publicKey: vapidPublicKey(),
       devices: rows.length,
       leadMin: rows[0]?.lead_min ?? 5,
     },

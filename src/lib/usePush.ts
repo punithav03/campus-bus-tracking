@@ -29,6 +29,7 @@ export function usePush() {
   const [state, setState] = useState<PushState>('working');
   const [leadMin, setLeadMin] = useState(5);
   const [error, setError] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (typeof window === 'undefined') return;
@@ -38,7 +39,7 @@ export function usePush() {
     }
     try {
       const info = await (await fetch('/api/push', { cache: 'no-store' })).json();
-      if (!info.available || !info.publicKey) { setState('unavailable'); return; }
+      if (!info.available || !info.publicKey) { setProblem(info.problem ?? null); setState('unavailable'); return; }
       setLeadMin(info.leadMin ?? 5);
 
       if (Notification.permission === 'denied') { setState('blocked'); return; }
@@ -69,11 +70,17 @@ export function usePush() {
       }
 
       const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription()
-        ?? await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlB64ToUint8(info.publicKey),
-        });
+      const key = urlB64ToUint8(info.publicKey);
+      let sub = await reg.pushManager.getSubscription();
+      // A subscription made with an older server key can never be delivered
+      // to: drop it and make a fresh one.
+      const old = sub?.options?.applicationServerKey;
+      if (sub && old && (old.byteLength !== key.byteLength
+          || !new Uint8Array(old).every((b, i) => b === key[i]))) {
+        await sub.unsubscribe().catch(() => {});
+        sub = null;
+      }
+      sub = sub ?? await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
 
       const r = await fetch('/api/push', {
         method: 'POST',
@@ -84,13 +91,21 @@ export function usePush() {
 
       setLeadMin(lead);
       setState('on');
+      // Show one straight away, so the student sees exactly where these will
+      // appear (and that they work) instead of waiting for tomorrow's bus.
+      if (state !== 'on') {
+        void reg.showNotification('Bus notifications are on', {
+          body: 'A card like this will count your bus down to your stop. Swipe it away and it only comes back when the bus is about to reach you.',
+          icon: '/icon-192.png', badge: '/icon-192.png', tag: 'bus-welcome',
+        }).catch(() => {});
+      }
       return true;
     } catch (e) {
       setError((e as Error).message);
       await refresh();
       return false;
     }
-  }, [leadMin, refresh]);
+  }, [leadMin, refresh, state]);
 
   const disable = useCallback(async () => {
     setState('working');
@@ -115,5 +130,5 @@ export function usePush() {
     if (state === 'on') await enable(mins);
   }, [state, enable]);
 
-  return { state, leadMin, error, enable, disable, setLead, refresh };
+  return { state, leadMin, error, problem, enable, disable, setLead, refresh };
 }

@@ -36,6 +36,12 @@ export interface Card {
 
 export interface CardInput {
   view: StateView;
+  /**
+   * The student swiped the card away. From then on only the moments that
+   * matter get through: the bus about to reach them, at their stop, a skip,
+   * and the college arrival. No countdown, no "started", no "leave now".
+   */
+  dismissed?: boolean;
   stopId: string | null;
   /** The student's own warning time, minutes. */
   leadMin: number;
@@ -92,7 +98,7 @@ function cardImage(view: StateView, mine: StopView | null, etaMin: number | null
   return `/api/push/card?${q.toString()}`;
 }
 
-export function cardFor({ view, stopId, leadMin, sent, now }: CardInput): Card | null {
+export function cardFor({ view, stopId, leadMin, sent, now, dismissed = false }: CardInput): Card | null {
   const trip = view.trip;
   if (!trip) return null;
   const route = view.route.short || view.route.name;
@@ -116,6 +122,7 @@ export function cardFor({ view, stopId, leadMin, sent, now }: CardInput): Card |
 
   // No stop chosen: a plain "on its way" card, no countdown to give.
   if (!mine) {
+    if (dismissed) return null;
     return {
       ...base,
       title: `${route} is on its way`,
@@ -155,6 +162,7 @@ export function cardFor({ view, stopId, leadMin, sent, now }: CardInput): Card |
         stopsAway: 0,
       };
     }
+    if (dismissed) return null;
     return {
       ...base,
       title: `${route} left ${mine.name}`,
@@ -173,7 +181,9 @@ export function cardFor({ view, stopId, leadMin, sent, now }: CardInput): Card |
   const arrives = clockIST(now + mine.etaS * 1000);
 
   let alert: Alert | null = null;
-  if (stopsAway <= 1 && etaMin <= 3 && !sent.has('arriving')) alert = 'arriving';
+  // About to reach you: your stop is next and it is a minute or two away.
+  if (stopsAway <= 1 && etaMin <= 2 && !sent.has('arriving')) alert = 'arriving';
+  else if (dismissed) return null;   // cleared: say nothing until it is arriving
   // Within the student's warning time: "leave now" — even if the bus has
   // only just started, because that is the thing they need to hear.
   else if (etaMin <= leadMin && !sent.has('leave') && !sent.has('arriving')) alert = 'leave';

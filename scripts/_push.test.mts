@@ -55,7 +55,21 @@ console.log('\n── COMING TO YOU ──');
 
   const s3 = stops.map((s) => (s.id === 'r-1' ? { ...s, state: 'served', passed: true } : s.id === 'r-2' ? { ...s, etaS: 120 } : s));
   const ar = cardFor({ view: view(18500, s3, { progress: 0.6 }), stopId: 'r-2', leadMin: 8, sent: new Set<Alert>(['started', 'leave']), now: NOW })!;
-  ok('next stop and under 3 min: "arriving"', ar.alert === 'arriving' && ar.body.startsWith('Next stop is yours'), `${ar.alert} ${ar.body}`);
+  ok('next stop and 2 min or less: "arriving"', ar.alert === 'arriving' && ar.body.startsWith('Next stop is yours'), `${ar.alert} ${ar.body}`);
+}
+
+console.log('\n── SWIPED AWAY ──');
+{
+  const stops = [stop(0, 'Town Club', 0, { state: 'served', passed: true }), stop(1, 'Leela Mahal', 10000, { etaS: 300 }),
+    stop(2, 'Srinivasam', 20000, { etaS: 420 }), stop(3, 'SVPCET', 50000, { etaS: 4000 })];
+  const quiet = cardFor({ view: view(9000, stops, { progress: 0.4 }), stopId: 'r-2', leadMin: 8, sent: new Set<Alert>(['started']), now: NOW, dismissed: true });
+  ok('after a swipe: no countdown, no "leave now"', quiet === null, JSON.stringify(quiet?.title));
+  const s2 = stops.map((s) => (s.id === 'r-1' ? { ...s, state: 'served', passed: true } : s.id === 'r-2' ? { ...s, etaS: 90 } : s));
+  const back = cardFor({ view: view(18800, s2, { progress: 0.6 }), stopId: 'r-2', leadMin: 8, sent: new Set<Alert>(['started']), now: NOW, dismissed: true });
+  ok('it comes back when the bus is about to reach you', back?.alert === 'arriving', String(back?.alert));
+  const done = [stop(0, 'A', 0, { state: 'served', passed: true }), stop(1, 'SVPCET', 50000, { state: 'served', passed: true, arrivedAt: NOW })];
+  const fin = cardFor({ view: view(50000, done, { status: 'finished' }), stopId: 'r-0', leadMin: 8, sent: new Set<Alert>(['arriving']), now: NOW, dismissed: true });
+  ok('and when it reaches the college', fin?.alert === 'arrived');
 }
 
 console.log('\n── AT AND AFTER YOUR STOP ──');

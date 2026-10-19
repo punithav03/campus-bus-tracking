@@ -30,15 +30,38 @@ import { cardFor, type Alert } from './push-plan';
  */
 
 let configured = false;
+/** Why push is not working, in words safe to show — never the keys themselves. */
+let problem: string | null = null;
+
+/**
+ * Keys pasted into a hosting dashboard pick up quotes, spaces and line breaks.
+ * web-push rejects them by throwing, which used to turn GET /api/push into a
+ * bare 500 and hid the notifications card for every student. Clean them up,
+ * and if they are still wrong, say which one.
+ */
+const clean = (v: string | undefined) => (v ?? '').trim().replace(/^['"]|['"]$/g, '').replace(/\s+/g, '');
+export const vapidPublicKey = () => clean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) || null;
+
 function configure(): boolean {
   if (configured) return true;
-  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  const priv = process.env.VAPID_PRIVATE_KEY;
-  if (!pub || !priv) return false;
-  webpush.setVapidDetails(process.env.VAPID_SUBJECT ?? 'mailto:admin@example.com', pub, priv);
+  const pub = clean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY);
+  const priv = clean(process.env.VAPID_PRIVATE_KEY);
+  let subject = (process.env.VAPID_SUBJECT ?? '').trim().replace(/^['"]|['"]$/g, '');
+  if (!/^(mailto:|https:)/.test(subject)) subject = subject.includes('@') ? `mailto:${subject}` : 'mailto:transport@svpcet.ac.in';
+  if (!pub || !priv) { problem = 'The server has no notification keys (NEXT_PUBLIC_VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).'; return false; }
+  try {
+    webpush.setVapidDetails(subject, pub, priv);
+  } catch (e) {
+    problem = `The server's notification keys are not valid: ${(e as Error).message}`;
+    console.error('[push]', problem);
+    return false;
+  }
   configured = true;
+  problem = null;
   return true;
 }
+
+export const pushProblem = () => problem;
 
 export type Kind = Alert;
 
@@ -161,7 +184,7 @@ async function subsFor(rolls: string[]): Promise<Map<string, Sub[]>> {
  * and never more than about once every 45 seconds. In memory: after a restart
  * the worst case is one extra quiet update.
  */
-interface CardState { sent: Set<Alert>; etaMin: number | null; stopsAway: number | null; at: number; title: string; done: boolean }
+interface CardState { sent: Set<Alert>; etaMin: number | null; stopsAway: number | null; at: number; title: string; done: boolean; dismissed: boolean }
 const cards = new Map<string, CardState>();
 const UPDATE_MIN_GAP_MS = 45_000;
 const UPDATE_MAX_GAP_MS = 150_000;
@@ -198,14 +221,16 @@ export async function notifyForTrip(
     const key = `${tripId}:${st.roll_no}`;
     let state = cards.get(key);
     if (!state) {
-      state = { sent: await alreadySent(tripId, st.roll_no), etaMin: null, stopsAway: null, at: 0, title: '', done: false };
+      const before = await alreadySent(tripId, st.roll_no);
+      state = { sent: before, etaMin: null, stopsAway: null, at: 0, title: '', done: false,
+        dismissed: (before as Set<string>).has('dismissed') };
       cards.set(key, state);
     }
     if (state.done) continue;
 
     // The earliest warning any of their devices asked for.
     const lead = Math.max(1, Math.min(30, Math.max(...devices.map((d) => d.lead_min))));
-    const card = cardFor({ view, stopId: st.stop_id, leadMin: lead, sent: state.sent, now });
+    const card = cardFor({ view, stopId: st.stop_id, leadMin: lead, sent: state.sent, now, dismissed: state.dismissed });
     if (!card) continue;
 
     let alert = card.alert;
@@ -216,10 +241,10 @@ export async function notifyForTrip(
 
     const changed = card.etaMin !== state.etaMin || card.stopsAway !== state.stopsAway;
     const gap = now - state.at;
-    const update = !alert && card.phase === 'live' &&
+    const update = !alert && !state.dismissed && card.phase === 'live' &&
       ((changed && gap >= UPDATE_MIN_GAP_MS) || gap >= UPDATE_MAX_GAP_MS);
     // A closing card ("left your stop at 08:20") replaces the live one, once.
-    const final = !alert && card.phase === 'done' && state.at > 0 && card.title !== state.title;
+    const final = !alert && !state.dismissed && card.phase === 'done' && state.at > 0 && card.title !== state.title;
     if (!alert && !update && !final) continue;
 
     const payload: PushPayload = {
@@ -250,6 +275,16 @@ export async function notifyForTrip(
   if (cards.size > 5000) {
     for (const [k, v] of cards) if (now - v.at > 6 * 3600_000) cards.delete(k);
   }
+}
+
+/**
+ * The student swiped this trip's card away. Remembered in the database (so a
+ * restart keeps it) and in the live card state (so the very next tick obeys).
+ */
+export async function markDismissed(tripId: number, roll: string): Promise<void> {
+  await claim(tripId, roll, 'dismissed');
+  const state = cards.get(`${tripId}:${roll}`);
+  if (state) state.dismissed = true;
 }
 
 /**

@@ -15,7 +15,7 @@ import { usePush } from '@/lib/usePush';
  * student lost for good.
  */
 export function NotifyCard() {
-  const { state, leadMin, error, enable, disable, setLead } = usePush();
+  const { state, leadMin, error, problem, enable, disable, setLead } = usePush();
   const [test, setTest] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
   const [testMsg, setTestMsg] = useState<string | null>(null);
 
@@ -36,7 +36,30 @@ export function NotifyCard() {
     setTimeout(() => setTest('idle'), 6000);
   };
 
-  if (state === 'unsupported' || state === 'unavailable') return null;
+  // Say why, rather than vanish: a missing card reads as "this app has no
+  // notifications", and nobody knows to fix anything.
+  if (state === 'unsupported' || state === 'unavailable') {
+    const ios = typeof navigator !== 'undefined' && /iphone|ipad/i.test(navigator.userAgent);
+    return (
+      <section className="card enter nt" data-i="4">
+        <div className="nt-head">
+          <div className="nt-text">
+            <div className="nt-title">Bus notifications</div>
+            <div className="nt-sub">
+              {state === 'unsupported'
+                ? (ios
+                  ? 'On iPhone: tap Share, then Add to Home Screen, and open the app from there to turn them on.'
+                  : 'This browser cannot show notifications. Open the app in Chrome.')
+                : 'Notifications are not available right now. The transport office has been told.'}
+            </div>
+            {problem && state === 'unavailable' && (
+              <div className="nt-sub" style={{ marginTop: 6, fontSize: 11.5, opacity: 0.7 }}>{problem}</div>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="card enter nt" data-i="4">
