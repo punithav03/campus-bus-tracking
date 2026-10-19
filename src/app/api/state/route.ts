@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { engine } from '@/lib/engine';
 import { requireRoute } from '@/lib/guard';
+import { routeColorFor } from '@/lib/brand';
 import { ensureLive } from '@/lib/live';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +23,11 @@ export async function GET(req: Request) {
   if (!view) return NextResponse.json({ error: 'unknown route' }, { status: 404 });
 
   return NextResponse.json(
-    { ...view, replaying: engine.isReplaying(g.routeId!) },
+    {
+      ...view,
+      route: { ...view.route, color: routeColorFor(g.session.role, view.route.color) },
+      replaying: engine.isReplaying(g.routeId!),
+    },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

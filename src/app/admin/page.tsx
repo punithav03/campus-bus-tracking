@@ -17,7 +17,7 @@ import { haptic } from '@/lib/device';
  */
 
 interface FleetRoute {
-  id: string; code: string; name: string; color: string;
+  id: string; code: string; name: string; color: string; busNumber?: string | null;
   schedStart: string; lengthM: number; stopCount: number;
   firstStop: string; lastStop: string;
   live: {
@@ -28,6 +28,7 @@ interface FleetRoute {
 }
 
 interface Driver { id: string; name: string; phone: string; routeId: string | null }
+interface Review { roll: string; name: string; routeId: string | null; pickup: string | null; stop: string | null; note: string }
 
 const fmtDelay = (s: number) => {
   const m = Math.round(Math.abs(s) / 60);
@@ -43,6 +44,8 @@ function AdminInner() {
   const [routes, setRoutes] = useState<FleetRoute[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [review, setReview] = useState<Review[]>([]);
+  const [noStop, setNoStop] = useState<Record<string, number>>({});
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -58,6 +61,8 @@ function AdminInner() {
         setRoutes(n.routes ?? []);
         setDrivers(f.drivers ?? []);
         setCounts(f.studentsByRoute ?? {});
+        setReview(f.review ?? []);
+        setNoStop(f.noStopByRoute ?? {});
         setErr(null);
       } catch {
         if (alive) setErr('Could not reach the server.');
@@ -110,7 +115,7 @@ function AdminInner() {
                 <div className="ti-route-text">
                   <div className="ti-route-name">{r.name}</div>
                   <div className="ti-route-sub">
-                    {r.stopCount} stops · {(r.lengthM / 1000).toFixed(1)} km · starts {r.schedStart}
+                    {r.busNumber ? `${r.busNumber} · ` : ''}{r.stopCount} stops · {(r.lengthM / 1000).toFixed(1)} km · starts {r.schedStart}
                   </div>
                 </div>
                 <span className="ti-state" style={{ position: 'static' }} data-live={!!live}>
@@ -162,6 +167,7 @@ function AdminInner() {
                 </span>
                 <span className="adm-count">
                   {counts[r.id] ?? 0} students
+                  {noStop[r.id] ? <span className="adm-nostop"> · {noStop[r.id]} to pick a stop</span> : null}
                   <span className="adm-go" aria-hidden>›</span>
                 </span>
               </div>
@@ -172,6 +178,30 @@ function AdminInner() {
           );
         })}
       </div>
+
+      {review.length > 0 && (
+        <details className="card adm-review">
+          <summary>
+            <strong>{review.length} students to confirm</strong>
+            <span>pickup points the timetable does not list, or spellings read one way</span>
+          </summary>
+          {routes.filter((r) => review.some((x) => x.routeId === r.id)).map((r) => (
+            <div key={r.id} className="adm-review-group">
+              <div className="adm-review-route">
+                <span className="ti-badge" style={{ background: r.color }}>{r.code}</span> {r.name}
+              </div>
+              {review.filter((x) => x.routeId === r.id).map((x) => (
+                <div key={x.roll} className="adm-review-row">
+                  <div><strong>{x.name}</strong> <span className="num">{x.roll}</span></div>
+                  <div className="adm-review-note">
+                    “{x.pickup}” → {x.stop ? <strong>{x.stop}</strong> : <em>no stop yet</em>}. {x.note}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </details>
+      )}
 
       {err && <div className="note">{err}</div>}
 

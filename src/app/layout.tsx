@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { InlineScript } from '@/components/InlineScript';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { RegisterSW } from '@/components/RegisterSW';
 import { PageTransition } from '@/components/PageTransition';
@@ -114,7 +115,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         <style dangerouslySetInnerHTML={{ __html: BOOT_CSS }} />
-        <script dangerouslySetInnerHTML={{ __html: BOOT_SKIP }} />
+        <InlineScript html={BOOT_SKIP} />
       </head>
       <body>
         {/* Server-rendered, so the mark is in the FIRST painted frame and

@@ -134,15 +134,103 @@ export function syntheticTrace(route: LoadedRoute): TracePoint[] {
 }
 
 /**
- * The trace to replay for a route: the recorded one if we have it, otherwise
- * a synthetic drive down the same road.
+ * The same drive, with the bus skipping a village.
+ *
+ * The morning this app exists for: nobody waiting at Nindra, so the driver
+ * carries straight on past the turning instead of driving the spur out and
+ * back. This finds the longest out-and-back in the trace — the bus leaves a
+ * spot, goes more than SPUR_MIN_M away, and comes back to within RETURN_M of
+ * the same spot — and cuts it out, closing the time gap so the bus simply
+ * drives on. Nothing is hard-coded, so it works on every route's trace.
+ *
+ * Shows the whole of Plan B in one run: the marker stays on the main road,
+ * the skipped stops say so, and the ETAs downstream drop by the time the
+ * spur would have taken.
  */
-export function demoTrace(routeKey: string): { points: TracePoint[]; source: 'recorded' | 'synthetic' } | null {
-  const recorded = getReferenceTrip(routeKey);
-  if (recorded?.points?.length) {
-    return { points: recorded.points, source: 'recorded' };
+const SPUR_MIN_M = 800;
+// Generous, because not every spur rejoins at the exact point it left: on
+// route 3 the closest return is 89 m away, a junction with a short link.
+const RETURN_M = 120;
+
+export function skipLongestSpur(
+  points: TracePoint[], stops: { lat: number; lng: number }[] = [],
+): { points: TracePoint[]; cutS: number } | null {
+  const R = 6371000;
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dist = (a: TracePoint, b: TracePoint) => {
+    const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  // Where along the trace each stop is served: its nearest fix. A spur worth
+  // cutting for the demo is one with stops on it — skipping an empty loop
+  // shows nothing.
+  const at = stops.map((st) => {
+    let k = -1, bd = Infinity;
+    for (let n = 0; n < points.length; n += 2) {
+      const d = dist(points[n], st as TracePoint);
+      if (d < bd) { bd = d; k = n; }
+    }
+    return bd < 150 ? k : -1;
+  });
+  const score = (i: number, j: number) => at.filter((k) => k > i && k < j).length;
+  let best: { i: number; j: number; n: number } | null = null;
+  for (let i = 0; i < points.length; i += 3) {
+    let away = 0;
+    for (let j = i + 1; j < points.length && points[j].t - points[i].t < 1800; j++) {
+      const d = dist(points[i], points[j]);
+      if (d > away) away = d;
+      // Away and back, and the return is the closest it gets — not merely the
+      // first fix inside the radius, which would cut a few seconds short.
+      if (away >= SPUR_MIN_M && d <= RETURN_M &&
+          (j + 1 >= points.length || dist(points[i], points[j + 1]) >= d)) {
+        const n = score(i, j);
+        if (!best || n > best.n ||
+            (n === best.n && points[j].t - points[i].t > points[best.j].t - points[best.i].t)) {
+          best = { i, j, n };
+        }
+        break;
+      }
+    }
   }
-  const route = getRoute(routeKey);
-  if (!route) return null;
-  return { points: syntheticTrace(route), source: 'synthetic' };
+  // Nothing worth skipping: no out-and-back with a stop on it. Route 3's
+  // village detours are loops — out one road, back another — so there is no
+  // drive to cut without inventing a road the bus would have used instead.
+  if (!best || (stops.length > 0 && best.n === 0)) return null;
+  // Leave enough time to cover the gap between the two cut points at town
+  // speed, so the joined trace never asks the bus to teleport.
+  const linkS = Math.max(1, Math.round(dist(points[best.i], points[best.j]) / 8));
+  const cutS = points[best.j].t - points[best.i].t - linkS;
+  if (cutS <= 0) return null;
+  return {
+    points: [
+      ...points.slice(0, best.i + 1),
+      ...points.slice(best.j).map((p) => ({ ...p, t: p.t - cutS })),
+    ],
+    cutS,
+  };
+}
+
+/**
+ * The trace to replay for a route: the recorded one if we have it, otherwise
+ * a synthetic drive down the same road. With `skipSpur`, the same drive with
+ * its longest out-and-back cut out.
+ */
+export function demoTrace(
+  routeKey: string, opts: { skipSpur?: boolean } = {},
+): { points: TracePoint[]; source: 'recorded' | 'synthetic'; cutS?: number } | null {
+  const recorded = getReferenceTrip(routeKey);
+  let out: { points: TracePoint[]; source: 'recorded' | 'synthetic' } | null = null;
+  if (recorded?.points?.length) {
+    out = { points: recorded.points, source: 'recorded' };
+  } else {
+    const route = getRoute(routeKey);
+    if (!route) return null;
+    out = { points: syntheticTrace(route), source: 'synthetic' };
+  }
+  if (opts.skipSpur) {
+    const cut = skipLongestSpur(out.points, getRoute(routeKey)?.stops ?? []);
+    return cut ? { ...out, points: cut.points, cutS: cut.cutS } : { ...out, cutS: 0 };
+  }
+  return out;
 }

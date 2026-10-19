@@ -1,0 +1,940 @@
+{
+ "year": "2026-27",
+ "source": "Transport Route timings 2026-27.xlsx",
+ "importedAt": "2026-10-19T07:40:46+00:00",
+ "buses": [
+  {
+   "id": "chittoor",
+   "code": "1",
+   "name": "Chittoor",
+   "sheet": "CHITTOOR",
+   "busNo": "AP03TD4149",
+   "driver": {
+    "name": "KBM Shafi",
+    "phone": "7382878912"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "CHITTOOR",
+     "time": "07:50"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "G.D.NELLORE",
+     "time": "08:10"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "ETTERI",
+     "time": "08:15"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "KOTHAPALLI MITTA",
+     "time": "08:30"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "GANGAMMA GUDI",
+     "time": "08:35"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "ARIMAKULA PALLI",
+     "time": "08:35"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 7,
+     "name": "SR PURAM",
+     "time": "08:45"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 8,
+     "name": "SANAKUPPAM",
+     "time": "08:50"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 9,
+     "name": "MUDHIKUPPAM",
+     "time": "08:50"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 10,
+     "name": "KOLLAGUNTA",
+     "time": "08:50"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 11,
+     "name": "PALLIPATTU",
+     "time": "08:55"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 12,
+     "name": "AMMAPALLI CROSS",
+     "time": "09:00"
+    },
+    {
+     "seq": 13,
+     "sheetNo": 13,
+     "name": "CHITHAMANDI",
+     "time": "09:05"
+    },
+    {
+     "seq": 14,
+     "sheetNo": 14,
+     "name": "RKVB PETA",
+     "time": "09:10"
+    },
+    {
+     "seq": 15,
+     "sheetNo": 15,
+     "name": "KARVETI NAGARAM",
+     "time": "09:15"
+    },
+    {
+     "seq": 16,
+     "sheetNo": 16,
+     "name": "COLLEGE",
+     "time": "09:25"
+    }
+   ]
+  },
+  {
+   "id": "penumur",
+   "code": "2",
+   "name": "Penumur",
+   "sheet": "PENUMUR",
+   "busNo": "AP03TB7775",
+   "driver": {
+    "name": "Yunis Basha",
+    "phone": "9652474716"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "PENUMURU",
+     "time": "07:50"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "JAKKADONA",
+     "time": "08:10"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "AGGICHENU PALLI",
+     "time": "08:15"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "NALLAVENGANA PALLI",
+     "time": "08:20"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "PATHAGUNTA",
+     "time": "08:25"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "CHAVATA GUNTA",
+     "time": "08:30"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 8,
+     "name": "KOMARAGUNTA",
+     "time": "08:35"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 9,
+     "name": "PACHIKAPALLAM",
+     "time": "08:40"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 10,
+     "name": "T.K.M PURAM",
+     "time": "08:43"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 11,
+     "name": "MAMBEDU",
+     "time": "08:45"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 12,
+     "name": "BALASALAGUNTA",
+     "time": "08:45"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 13,
+     "name": "RKM PURAM",
+     "time": "08:50"
+    },
+    {
+     "seq": 13,
+     "sheetNo": 14,
+     "name": "KARVETI NAGARAM",
+     "time": "09:05"
+    },
+    {
+     "seq": 14,
+     "sheetNo": 15,
+     "name": "COLLEGE",
+     "time": "09:15"
+    }
+   ]
+  },
+  {
+   "id": "chandragiri",
+   "code": "3",
+   "name": "Chandragiri",
+   "sheet": "CHANDRAGIRI",
+   "busNo": "AP39WQ4798",
+   "driver": {
+    "name": "A Eswar",
+    "phone": "8686288604"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "CHANDRAGIRI",
+     "time": "07:20"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "KALURU",
+     "time": "07:30"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "PERUMALAPALLI",
+     "time": "07:32"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "MALLAVARAM",
+     "time": "07:33"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "CHERLOPALLI",
+     "time": "07:35"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "BALAJI COLONY",
+     "time": "07:50"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 7,
+     "name": "MR PALLI",
+     "time": "07:55"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 8,
+     "name": "ANNAMAYA CIRCLE",
+     "time": "08:00"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 9,
+     "name": "DR MAHAL",
+     "time": "08:05"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 10,
+     "name": "LAKSHMIPURAM CIRCLE",
+     "time": "08:10"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 11,
+     "name": "TIRUCHANOOR",
+     "time": "08:15"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 12,
+     "name": "MULLAPUDI",
+     "time": "08:20"
+    },
+    {
+     "seq": 13,
+     "sheetNo": 13,
+     "name": "PADIPETA",
+     "time": "08:25"
+    },
+    {
+     "seq": 14,
+     "sheetNo": 14,
+     "name": "KAYAMPETA",
+     "time": "08:35"
+    },
+    {
+     "seq": 15,
+     "sheetNo": 15,
+     "name": "PUDI GATE",
+     "time": "08:40"
+    },
+    {
+     "seq": 16,
+     "sheetNo": 16,
+     "name": "VADAMALAPETA",
+     "time": "08:45"
+    },
+    {
+     "seq": 17,
+     "sheetNo": 17,
+     "name": "TADUKU",
+     "time": "09:00"
+    },
+    {
+     "seq": 18,
+     "sheetNo": 18,
+     "name": "PUTTUR",
+     "time": "09:10"
+    },
+    {
+     "seq": 19,
+     "sheetNo": 19,
+     "name": "COLLEGE",
+     "time": "09:20"
+    }
+   ]
+  },
+  {
+   "id": "srikalahasti",
+   "code": "4",
+   "name": "Srikalahasti",
+   "sheet": "SRIKALAHASTHI",
+   "busNo": "AP39WG7958",
+   "driver": {
+    "name": "Manikanta",
+    "phone": "9581393642"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "SRI KALAHASTHI",
+     "time": "07:40"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "CHERLOPALLI",
+     "time": "08:05"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "THONDAMANADU",
+     "time": "08:10"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "YERPEDU",
+     "time": "08:20"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "ANJIMEDU",
+     "time": "08:30"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "MALLAVARAM",
+     "time": "08:30"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 7,
+     "name": "RENIGUNTA",
+     "time": "08:45"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 8,
+     "name": "GAJULAMANDAYAM",
+     "time": "08:55"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 9,
+     "name": "ALLIKESAM",
+     "time": "08:55"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 10,
+     "name": "PADIREDUBYPASS",
+     "time": "09:00"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 11,
+     "name": "GOLLPALLI",
+     "time": "09:05"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 12,
+     "name": "PUTTUR",
+     "time": "09:15"
+    },
+    {
+     "seq": 13,
+     "sheetNo": 13,
+     "name": "COLLEGE",
+     "time": "09:25"
+    }
+   ]
+  },
+  {
+   "id": "nagalapuram",
+   "code": "5",
+   "name": "Nagalapuram",
+   "sheet": "NAGALAPURAM",
+   "busNo": "AP39WG5135",
+   "driver": {
+    "name": "Yogesh",
+    "phone": "6301424915"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "NAGALAPURAM",
+     "time": "08:05"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "RAMAGIRI",
+     "time": "08:10"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "APPAMBEDU",
+     "time": "08:15"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "PICHATUR BYPASS",
+     "time": "08:20"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "KEELAPUDI",
+     "time": "08:25"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "NINDRA",
+     "time": "08:30"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 7,
+     "name": "VEDHANTHAPURAM",
+     "time": "08:40"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 8,
+     "name": "PALAMANGALAM",
+     "time": "08:45"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 9,
+     "name": "CHITTOOR KANDRIGA",
+     "time": "08:50"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 10,
+     "name": "GOVINDHAPPANAIDU KANDRIGA",
+     "time": "08:55"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 11,
+     "name": "VETHALATADUKU",
+     "time": "09:00"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 12,
+     "name": "NARAYANAVANAM BYPASS",
+     "time": "09:05"
+    },
+    {
+     "seq": 13,
+     "sheetNo": 13,
+     "name": "PUTTUR",
+     "time": "09:10"
+    },
+    {
+     "seq": 14,
+     "sheetNo": 14,
+     "name": "COLLEGE",
+     "time": "09:20"
+    }
+   ]
+  },
+  {
+   "id": "vijayapuram",
+   "code": "6",
+   "name": "Vijayapuram",
+   "sheet": "VIJAYAPURAM",
+   "busNo": "AP03TB7778",
+   "driver": {
+    "name": "Yugandhar",
+    "phone": "7904802655"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "SRI HARIPURAM",
+     "time": "07:10"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "MAHARAJAPURAM",
+     "time": "07:15"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "KOSALANAGARAM",
+     "time": "07:25"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "VIJAYAPURAM",
+     "time": "07:35"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "MAHAVIRAPURAM",
+     "time": "07:40"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "JAGANADHAPURAM",
+     "time": "07:50"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 7,
+     "name": "PANNUR SUB STATION",
+     "time": "08:10"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 8,
+     "name": "NETTIRI CROSS",
+     "time": "08:15"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 9,
+     "name": "KAIPAKAM",
+     "time": "08:20"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 10,
+     "name": "KRISHANARAMA PURAM",
+     "time": "08:25"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 11,
+     "name": "B.G.KANDRIGA",
+     "time": "08:25"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 12,
+     "name": "BUGGA AGRAHARAM",
+     "time": "08:30"
+    },
+    {
+     "seq": 13,
+     "sheetNo": 13,
+     "name": "DESAMMA GUDI",
+     "time": "08:35"
+    },
+    {
+     "seq": 14,
+     "sheetNo": 14,
+     "name": "NAGARI",
+     "time": "08:40"
+    },
+    {
+     "seq": 15,
+     "sheetNo": 15,
+     "name": "MANDAPAM",
+     "time": "08:45"
+    },
+    {
+     "seq": 16,
+     "sheetNo": 16,
+     "name": "PANDURAJUPURAM",
+     "time": "08:55"
+    },
+    {
+     "seq": 17,
+     "sheetNo": 17,
+     "name": "KAILASAPURAM",
+     "time": "09:00"
+    },
+    {
+     "seq": 18,
+     "sheetNo": 18,
+     "name": "PARAMESWAR MANGALAM",
+     "time": "09:05"
+    },
+    {
+     "seq": 19,
+     "sheetNo": 19,
+     "name": "PUTTUR",
+     "time": "09:10"
+    },
+    {
+     "seq": 20,
+     "sheetNo": 20,
+     "name": "COLLEGE",
+     "time": "09:20"
+    }
+   ]
+  },
+  {
+   "id": "tirupati",
+   "code": "7",
+   "name": "Tirupati",
+   "sheet": "TIRUPATHI ROUTE",
+   "busNo": "AP39WQ4796",
+   "driver": {
+    "name": "J Shankar",
+    "phone": "9573061292"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "TOWN CLUB",
+     "time": "07:45"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "MEDICAL COLLEGE",
+     "time": "07:50"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "ISKON TEMPLE",
+     "time": "07:55"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "MUNCIPAL PARK",
+     "time": "08:05"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "LEELA MAHAL",
+     "time": "08:10"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "TMC",
+     "time": "08:15"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 7,
+     "name": "SRINIVASAM",
+     "time": "08:20"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 8,
+     "name": "BLISS CIRCLE",
+     "time": "08:20"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 9,
+     "name": "NARAYANDRI HOSPITAL",
+     "time": "08:25"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 10,
+     "name": "RENIGUNTA",
+     "time": "08:30"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 11,
+     "name": "OIL FACTORY",
+     "time": "08:40"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 12,
+     "name": "TADUKU STATION",
+     "time": "08:50"
+    },
+    {
+     "seq": 13,
+     "sheetNo": 13,
+     "name": "PUTTUR",
+     "time": "09:05"
+    },
+    {
+     "seq": 14,
+     "sheetNo": 14,
+     "name": "COLLEGE",
+     "time": "09:20"
+    }
+   ]
+  },
+  {
+   "id": "sathrawada",
+   "code": "8",
+   "name": "Sathrawada",
+   "sheet": "SATHRAWADA",
+   "busNo": "AP03TD9639",
+   "driver": {
+    "name": "A Antony",
+    "phone": "9908291944"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "THADUKUPETA",
+     "time": "08:00"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "V K R PURAM",
+     "time": "08:10"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "GUDDIKANDRIGA",
+     "time": "08:15"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "NETHAM KANDRIGA",
+     "time": "08:17"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "KEELAPUDI",
+     "time": "08:20"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "EKAMBRAKUPPAM",
+     "time": "08:30"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 7,
+     "name": "SATHRAWADA",
+     "time": "08:45"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 8,
+     "name": "NAGARI",
+     "time": "08:50"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 9,
+     "name": "MANDAPAM",
+     "time": "08:55"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 10,
+     "name": "CHINTHALAPATTEDA",
+     "time": "09:00"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 11,
+     "name": "PUTTUR",
+     "time": "09:15"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 12,
+     "name": "COLLEGE",
+     "time": "09:25"
+    }
+   ]
+  },
+  {
+   "id": "kvb-puram",
+   "code": "9",
+   "name": "KVB Puram",
+   "sheet": "KVB PURAM",
+   "busNo": "AP03TD9149",
+   "driver": {
+    "name": "V Sudhakar",
+    "phone": "9550085083"
+   },
+   "stops": [
+    {
+     "seq": 1,
+     "sheetNo": 1,
+     "name": "KVB PURAM",
+     "time": "07:30"
+    },
+    {
+     "seq": 2,
+     "sheetNo": 2,
+     "name": "RAYAPEDU",
+     "time": "07:35"
+    },
+    {
+     "seq": 3,
+     "sheetNo": 3,
+     "name": "SADASHIVAPURAM",
+     "time": "07:40"
+    },
+    {
+     "seq": 4,
+     "sheetNo": 4,
+     "name": "M R KANDRIGA",
+     "time": "07:45"
+    },
+    {
+     "seq": 5,
+     "sheetNo": 5,
+     "name": "MIDHI KANDRIGA",
+     "time": "07:55"
+    },
+    {
+     "seq": 6,
+     "sheetNo": 6,
+     "name": "ADDALAMEDA",
+     "time": "08:00"
+    },
+    {
+     "seq": 7,
+     "sheetNo": 7,
+     "name": "T K PURAM",
+     "time": "08:05"
+    },
+    {
+     "seq": 8,
+     "sheetNo": 8,
+     "name": "PICHATUR",
+     "time": "08:10"
+    },
+    {
+     "seq": 9,
+     "sheetNo": 9,
+     "name": "KOPPEDU",
+     "time": "08:25"
+    },
+    {
+     "seq": 10,
+     "sheetNo": 10,
+     "name": "THUMBURU",
+     "time": "08:30"
+    },
+    {
+     "seq": 11,
+     "sheetNo": 11,
+     "name": "NAYANAR KANDRIGA",
+     "time": "08:35"
+    },
+    {
+     "seq": 12,
+     "sheetNo": 12,
+     "name": "NARAYANAVANAM",
+     "time": "08:45"
+    },
+    {
+     "seq": 13,
+     "sheetNo": 13,
+     "name": "PUTTUR",
+     "time": "08:55"
+    },
+    {
+     "seq": 14,
+     "sheetNo": 14,
+     "name": "COLLEGE",
+     "time": "09:10"
+    }
+   ]
+  }
+ ]
+}

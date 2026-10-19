@@ -9,6 +9,22 @@ export interface Stop {
   schedOffsetS: number;
   /** Position is interpolated, not surveyed — shown as ~ in the UI. */
   estimated?: boolean;
+  /**
+   * Pinned by hand, seen on a recorded ride, or a mapped bus stop. A village
+   * found by its name is probably right but unproven: the engine gives it more
+   * room before calling it skipped, and nobody is pushed about it.
+   */
+  verified?: boolean;
+  /** A student pickup point the bus passes that is not on the office's sheet. */
+  extra?: boolean;
+  /** The office's time for this stop, 'HH:MM'. */
+  time?: string;
+}
+
+export interface BusInfo {
+  number: string | null;
+  driver: string | null;
+  driverPhone: string | null;
 }
 
 export interface RouteData {
@@ -25,6 +41,8 @@ export interface RouteData {
   /** Reference time-vs-distance curve — the v1 ETA model. */
   profile: { d: number; t: number }[];
   source: string;
+  /** The vehicle and driver, from the office's sheet. */
+  bus?: BusInfo;
 }
 
 export interface Campus {
@@ -40,6 +58,7 @@ export interface RouteSummary {
   id: string; code: string; name: string; short: string; color: string;
   schedStart: string; lengthM: number; durationS: number; stopCount: number;
   firstStop: string; lastStop: string;
+  busNumber?: string | null; driver?: string | null;
 }
 
 export interface Network {
@@ -88,6 +107,18 @@ export interface EtaSnapshot {
   errorS?: number;
 }
 
+/**
+ * What happened at a stop, as OBSERVED — never inferred from distance alone.
+ *
+ *   served          the bus halted there, or was seen driving through it
+ *   skipped         the bus went on past without ever coming near it — a
+ *                   village with nobody waiting, a diversion around it
+ *   likely-skipped  off its route and getting further from this stop; not
+ *                   yet certain, so it is said as a likelihood
+ *   upcoming        not reached yet
+ */
+export type StopState = 'served' | 'skipped' | 'likely-skipped' | 'upcoming';
+
 export interface StopView {
   id: string;
   seq: number;
@@ -101,8 +132,14 @@ export interface StopView {
   etaLoS: number | null;
   etaHiS: number | null;
   etaNaiveS: number | null;
+  /** Behind the bus: served or skipped. Kept for screens that only need yes/no. */
   passed: boolean;
+  state: StopState;
+  /** Skipped stops: the closest the bus came, metres, when known. */
+  skippedByM?: number | null;
   estimated?: boolean;
+  verified?: boolean;
+  extra?: boolean;
   arrivedAt: number | null;
   /** Did the bus stop here, or only go past? Null until it has. */
   halted: boolean | null;
@@ -114,7 +151,10 @@ export interface TripView {
   routeId: string;
   status: 'running' | 'finished';
   startedAt: number;
-  /** Smoothed position along the route, in metres. */
+  /**
+   * Progress along the PLANNED route, in metres. Drives ETAs and the
+   * timetable comparison. It is not where the bus is drawn — lat/lng is.
+   */
   distAlongM: number;
   speedMps: number;
   lat: number;
@@ -132,6 +172,41 @@ export interface TripView {
   /** How slow the bus is running right now. 1.0 = exactly on the reference pace. */
   pace: number;
   paceBasis: 'recent' | 'trip';
+  /** On its planned route right now. False while it is somewhere the plan does not go. */
+  onRoute: boolean;
+  /** Seconds since it left the planned route, while it is off it. */
+  offRouteS: number | null;
+  /** Position matched to a known road (true) or the raw GPS fix (false). */
+  matched: boolean;
+  /**
+   * The newest stretch of road driven, ending at the bus — still open to
+   * revision by the matcher. Drawn as the end of the trail.
+   */
+  tail: [number, number][];
+  /** Points in the settled trail, so a client can fetch only what is new. */
+  trailN: number;
+  /**
+   * Off its route: the road from the bus to where it can rejoin, as routed
+   * now. Null when it is on its route.
+   */
+  aheadVia: [number, number][] | null;
+  /** Where along the planned route the line ahead continues from. */
+  aheadFromM: number;
+  /** Metres actually driven this run, along the road — not progress along the plan. */
+  drivenM: number;
+}
+
+/** One stretch of the trail. 'road' was matched to a known road; 'gps' is raw fixes joined up. */
+export interface TrailPiece { s: number; kind: 'road' | 'gps'; pts: [number, number][] }
+
+export interface TrailView {
+  tripId: string | null;
+  /** Total settled points; pass back as `n` next time. */
+  n: number;
+  /** Settled points after the caller's `n`, grouped by segment index `s`. */
+  add: TrailPiece[];
+  /** True when the caller's copy was stale and this is the whole trail. */
+  reset: boolean;
 }
 
 export interface StateView {

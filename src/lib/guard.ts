@@ -26,6 +26,12 @@ export function requireSession(req: Request, roles?: Role[]): Guarded {
   const session = sessionFromRequest(req);
   if (!session) return deny(401, 'Sign in to continue.');
   if (roles && !roles.includes(session.role)) return deny(403, 'Not allowed.');
+  // A first password is the admission number or the mobile number — things
+  // other people know. Until it is replaced the account can do nothing but
+  // replace it; the app's own screen enforces the same, this makes it real.
+  if (session.mustChangePassword && session.role !== 'admin') {
+    return deny(403, 'Choose a new password to continue.');
+  }
 
   let routeId: string | null = session.routeId;
   if (session.role === 'admin') {

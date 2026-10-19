@@ -7,13 +7,13 @@ import { TopBar } from '@/components/TopBar';
 import { useSession } from '@/lib/useSession';
 import { StripMap } from '@/components/StripMap';
 import { BottomSheet, useMediaQuery } from '@/components/BottomSheet';
-import type { MapRoute } from '@/components/MapView';
+import type { MapRoute, MapTrailSeg, MapStopState } from '@/components/MapView';
 import {
   CONFIDENCE_COLOR, CONFIDENCE_LABEL, clockAt, fmtAge, fmtClock, fmtDelay, fmtEta,
 } from '@/lib/format';
 import { useAnimatedNumber } from '@/lib/useAnimatedNumber';
 import { haptic, setBadge, share } from '@/lib/device';
-import type { Campus, RouteSummary, StateView } from '@/lib/types';
+import type { Campus, RouteSummary, StateView, TrailView } from '@/lib/types';
 
 const MapView = dynamic(() => import('@/components/MapView').then((m) => m.MapView), {
   ssr: false,
@@ -77,6 +77,17 @@ export function TrackClient({
   const geomRef = useRef<MapRoute | null>(null);
   geomRef.current = geom;
   const [state, setState] = useState<(StateView & { replaying?: boolean }) | null>(null);
+  /**
+   * The road the bus has actually driven this run, fetched incrementally:
+   * the server says how many settled points it has (trip.trailN) and we ask
+   * only for the ones we are missing. A full run is a few thousand points;
+   * re-sending them every two seconds to every student would be absurd.
+   */
+  const [trail, setTrail] = useState<{ tripId: string | null; n: number; segs: MapTrailSeg[] }>(
+    { tripId: null, n: 0, segs: [] });
+  const trailRef = useRef(trail);
+  trailRef.current = trail;
+  const trailBusy = useRef(false);
   const [myStopId, setMyStopId] = useState<string | null>(null);
   // The boarding point on the student's record — the sensible default.
   const [registeredStopId, setRegisteredStopId] = useState<string | null>(null);
@@ -294,6 +305,33 @@ export function TrackClient({
         if (dead || j.error) return;
         setState(j);
         setGotState(true);
+
+        // Fetch what is new on the trail, if anything is.
+        const have = trailRef.current;
+        const t = j.trip as StateView['trip'];
+        if (!t) {
+          if (have.tripId) setTrail({ tripId: null, n: 0, segs: [] });
+        } else if (!trailBusy.current && (t.id !== have.tripId || t.trailN !== have.n)) {
+          trailBusy.current = true;
+          try {
+            const sameTrip = t.id === have.tripId;
+            const q = `/api/trail?route=${routeId}&trip=${encodeURIComponent(sameTrip ? t.id : '')}` +
+              `&n=${sameTrip ? have.n : 0}`;
+            const tv: TrailView = await (await fetch(q, { cache: 'no-store' })).json();
+            if (!dead && tv && Array.isArray(tv.add)) {
+              setTrail((prev) => {
+                const segs = tv.reset || prev.tripId !== tv.tripId
+                  ? [] : prev.segs.map((sg) => ({ ...sg, pts: sg.pts }));
+                for (const piece of tv.add) {
+                  const cur = segs[piece.s];
+                  if (cur) segs[piece.s] = { kind: cur.kind, pts: [...cur.pts, ...piece.pts] };
+                  else segs[piece.s] = { kind: piece.kind, pts: piece.pts };
+                }
+                return { tripId: tv.tripId, n: tv.n, segs: segs.filter(Boolean) };
+              });
+            }
+          } finally { trailBusy.current = false; }
+        }
       } catch { /* transient — keep the last good state on screen */ }
     };
 
@@ -343,11 +381,23 @@ export function TrackClient({
 
   const route = state?.route;
   const color = route?.color ?? '#f97316';
-  const trip = state?.trip ?? null;
+  // A run that finished hours ago is history, not news: by the next morning
+  // the screen should be showing the timetable again, not "Trip ended".
+  const trip = state?.trip && !(state.trip.status === 'finished' && state.trip.ageS > 3 * 3600)
+    ? state.trip : null;
   const conf = trip?.confidence ?? 'stale';
 
   const leaveNow =
     myStop?.etaS != null && !myStop.passed && myStop.etaS <= walkMin * 60 + 90;
+  // Said separately from "passed", because they mean opposite things to a
+  // student at the stop: passed = you missed it; skipped = it never came.
+  const mySkipped = myStop?.state === 'skipped';
+  const myLikelySkipped = myStop?.state === 'likely-skipped';
+
+  const stopStates = useMemo<Record<string, MapStopState>>(
+    () => Object.fromEntries((state?.stops ?? []).map((s) => [s.id, s.state])),
+    [state?.stops],
+  );
 
   // The headline number rolls to its new value instead of snapping — a jump
   // reads as a glitch, a roll reads as a countdown.
@@ -366,7 +416,7 @@ export function TrackClient({
   // countable. Transit apps show both for exactly this reason.
   const stopsAway = useMemo(() => {
     if (!trip || !myStop || myStop.passed || !state) return null;
-    return state.stops.filter((s) => !s.passed && s.distAlongM <= myStop.distAlongM).length;
+    return state.stops.filter((s) => s.state === 'upcoming' && s.distAlongM <= myStop.distAlongM).length;
   }, [trip, myStop, state]);
 
   // The last stop is the college. When it has an arrival event the run is
@@ -379,6 +429,10 @@ export function TrackClient({
   // morning run, the far village on the way home.
   const finalEtaS = finalStop && !finalStop.passed ? finalStop.etaS : null;
   const arrivedAtCampus = finalStop?.arrivedAt ?? null;
+  // The run was closed before the bus got to the end of the line: the driver
+  // tapped End, or the office stopped it. Nothing after this is "on the way".
+  const endedEarly = !!trip && trip.status === 'finished' && !arrivedAtCampus;
+  const lastServed = state?.stops.filter((st) => st.state === 'served').pop() ?? null;
 
   // Minutes on the home-screen icon, so you can check without opening anything.
   useEffect(() => {
@@ -470,6 +524,9 @@ export function TrackClient({
                     its way, and saying otherwise sends a student home. */}
                 {!trip
                   ? (gotState ? 'No bus running' : 'Checking…')
+                  : endedEarly ? 'Trip ended'
+                  : mySkipped ? 'Bus did not come to your stop'
+                  : myLikelySkipped ? 'Bus may not come to your stop'
                   : myStop?.passed ? 'Bus has passed your stop'
                   : 'Bus on the way'}
               </span>
@@ -499,7 +556,16 @@ export function TrackClient({
                 the end of the line, not a percentage. "52% of the route" is a
                 number nobody can do anything with; "arrives 09:12" is one you
                 can ring somebody about. */}
-            {!isStudent && trip ? (
+            {endedEarly ? (
+              <>
+                <div className="hero-none">Trip ended</div>
+                <div className="hero-range" style={{ marginTop: 6 }}>
+                  This run was closed before the bus reached {finalStop?.name ?? 'the college'}
+                  {lastServed ? <>; it was last seen at <strong style={{ color: 'var(--text)' }}>{lastServed.name}</strong></> : null}.
+                  {isStudent ? ' If you are still waiting, call the driver.' : ''}
+                </div>
+              </>
+            ) : !isStudent && trip ? (
               <>
                 <div className="hero-main">
                   <div className="hero-figure">
@@ -547,6 +613,24 @@ export function TrackClient({
                   )}
                   likely {fmtEta(myStop.etaLoS)} – {fmtEta(myStop.etaHiS)}
                   {trip.delayS !== 0 && <> · running {fmtDelay(trip.delayS)}</>}
+                </div>
+              </>
+            ) : trip && myStop && mySkipped ? (
+              // Not "passed". Passed means you missed it; skipped means it
+              // never came — and the student should hear that plainly so
+              // they stop waiting and find another way in.
+              <>
+                <div className="hero-none">Bus did not come to {myStop.name}</div>
+                <div className="hero-range" style={{ marginTop: 6 }}>
+                  It went on along the route without coming to your stop today.
+                </div>
+              </>
+            ) : trip && myStop && myLikelySkipped ? (
+              <>
+                <div className="hero-none">Bus may not come to {myStop.name}</div>
+                <div className="hero-range" style={{ marginTop: 6 }}>
+                  It has left its usual route and is moving away from your stop.
+                  This will update the moment it turns back.
                 </div>
               </>
             ) : trip && arrivedAtCampus ? (
@@ -620,8 +704,9 @@ export function TrackClient({
               >
                 <span className="fresh-dot" />
                 <span>
-                  {CONFIDENCE_LABEL[conf]} · {fmtAge(trip.ageS)}
+                  {endedEarly ? 'Ended' : CONFIDENCE_LABEL[conf]} · {fmtAge(trip.ageS)}
                   {conf === 'estimated' && ' · position estimated'}
+                  {!trip.onRoute && trip.status === 'running' && ' · on a different road from usual'}
                 </span>
               </div>
             ) : (
@@ -746,17 +831,23 @@ export function TrackClient({
               bus={trip ? {
                 lat: trip.lat, lng: trip.lng, bearing: trip.bearing,
                 ghost: conf === 'estimated',
-                // The map carries the bus forward along the route between
-                // polls, so it needs the distance and speed, not just a point.
+                // The map carries the bus forward between polls, along the
+                // road it is actually on, so it needs the speed and which
+                // road ahead to use, not just a point.
                 distAlongM: trip.distAlongM,
                 speedMps: trip.speedMps,
                 // Predict only while we genuinely have the bus. A lost bus must
                 // sit still rather than glide confidently down the road.
-                live: conf === 'live' || conf === 'recent',
+                live: (conf === 'live' || conf === 'recent') && trip.status === 'running',
+                onRoute: trip.onRoute,
               } : null}
               myStopId={myStopId}
               campus={campus ? { lat: campus.lat, lng: campus.lng, name: campus.name } : null}
-              progress={trip?.progress ?? 0}
+              trail={trail.tripId === trip?.id ? trail.segs : []}
+              tail={trip?.tail ?? []}
+              aheadVia={trip?.aheadVia ?? null}
+              aheadFromM={trip ? trip.aheadFromM : null}
+              stopStates={stopStates}
               />
             </div>
             {trip && (
@@ -767,7 +858,7 @@ export function TrackClient({
                 </div>
                 <div className="stat">
                   <div className="stat-k">Travelled</div>
-                  <div className="stat-v num">{(trip.distAlongM / 1000).toFixed(1)}<small>km</small></div>
+                  <div className="stat-v num">{(trip.drivenM / 1000).toFixed(1)}<small>km</small></div>
                 </div>
                 <div className="stat">
                   <div className="stat-k">Schedule</div>

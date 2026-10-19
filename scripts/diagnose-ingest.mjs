@@ -2,7 +2,7 @@
  * Replays a reference trip through a faithful copy of the engine's accept()
  * filters and reports WHY each fix was rejected.
  *
- *   node scripts/diagnose-ingest.mjs route-1
+ *   node scripts/diagnose-ingest.mjs nagalapuram
  */
 
 import { readFileSync } from 'node:fs';
@@ -10,7 +10,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const id = process.argv[2] ?? 'route-1';
+const id = process.argv[2] ?? 'nagalapuram';
 const route = JSON.parse(readFileSync(join(ROOT, 'data', 'routes', `${id}.json`), 'utf8'));
 const trip = JSON.parse(readFileSync(join(ROOT, 'data', 'routes', `${id}.trip.json`), 'utf8'));
 

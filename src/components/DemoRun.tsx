@@ -23,7 +23,7 @@ export function DemoRun({ routeId, running }: { routeId: string; running: boolea
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function send(action: 'replay' | 'stop-replay', speed?: number) {
+  async function send(action: 'replay' | 'stop-replay', speed?: number, skipSpur = false) {
     if (busy) return;
     setBusy(true);
     setErr(null);
@@ -32,7 +32,7 @@ export function DemoRun({ routeId, running }: { routeId: string; running: boolea
       const r = await fetch(`/api/trip?route=${routeId}`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action, speed }),
+        body: JSON.stringify({ action, speed, skipSpur }),
       });
       const j = await r.json();
       if (!r.ok) setErr(j?.error ?? 'Could not start the demo.');
@@ -61,6 +61,14 @@ export function DemoRun({ routeId, running }: { routeId: string; running: boolea
           <button className="dr-btn dr-fast" disabled={busy}
                   onClick={() => void send('replay', 120)}>
             Fast
+          </button>
+          {/* The same ride, but the bus carries straight on past a village
+              nobody is waiting at. Shows the map keeping the bus on the road
+              it really took and the skipped stops saying so. */}
+          <button className="dr-btn" disabled={busy}
+                  title="Replay with the bus skipping a village spur"
+                  onClick={() => void send('replay', 30, true)}>
+            Skip a village
           </button>
         </>
       )}

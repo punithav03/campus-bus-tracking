@@ -1,5 +1,6 @@
 import { sql, one } from './db';
 import type { StopEvent } from './types';
+import type { TrailSeg } from './matcher';
 
 /**
  * The bridge between the engine's memory and the database.
@@ -145,7 +146,19 @@ export async function runningTrips(): Promise<OpenTrip[]> {
 export async function recordStopEvents(
   tripId: number, routeId: string, direction: Direction, events: StopEvent[],
   schedule: Map<string, number>, startedAt: number,
+  skipped: string[] = [],
 ): Promise<void> {
+  // A skipped stop is recorded too, without a time. Once only: the engine
+  // never un-skips a stop, and a later real arrival would be a different fact
+  // that the upsert below is allowed to overwrite.
+  for (const stopId of skipped) {
+    await sql(
+      `INSERT INTO stop_events (trip_id, stop_id, route_id, direction, reached_at, delay_s, skipped)
+       VALUES ($1,$2,$3,$4,NULL,NULL,true)
+       ON CONFLICT (trip_id, stop_id) DO NOTHING`,
+      [tripId, stopId, routeId, direction],
+    );
+  }
   for (const e of events) {
     if (!e.arrivedAt) continue;
     const sched = schedule.get(e.stopId);
@@ -154,7 +167,9 @@ export async function recordStopEvents(
     await sql(
       `INSERT INTO stop_events (trip_id, stop_id, route_id, direction, reached_at, delay_s)
        VALUES ($1,$2,$3,$4,to_timestamp($5/1000.0),$6)
-       ON CONFLICT (trip_id, stop_id) DO NOTHING`,
+       ON CONFLICT (trip_id, stop_id) DO UPDATE
+         SET reached_at = EXCLUDED.reached_at, delay_s = EXCLUDED.delay_s, skipped = false
+         WHERE stop_events.skipped`,
       [tripId, e.stopId, routeId, direction, e.arrivedAt, delayS],
     );
   }
@@ -175,3 +190,72 @@ export function istMinutes(now = new Date()): number {
   const ist = new Date(now.getTime() + 330 * 60_000);
   return ist.getUTCHours() * 60 + ist.getUTCMinutes();
 }
+
+/**
+ * Stop history for a trip, for putting it back after a restart: which stops
+ * were served and when, and which were skipped.
+ */
+export async function stopHistory(tripId: number): Promise<{
+  served: { stopId: string; reachedAt: number; delayS: number | null }[];
+  skipped: string[];
+}> {
+  const rows = await sql<{ stop_id: string; reached_at: string | null; delay_s: number | null; skipped: boolean }>(
+    `SELECT stop_id, reached_at, delay_s, skipped FROM stop_events WHERE trip_id = $1`, [tripId]);
+  return {
+    served: rows.filter((r) => !r.skipped && r.reached_at)
+      .map((r) => ({ stopId: r.stop_id, reachedAt: new Date(r.reached_at!).getTime(), delayS: r.delay_s })),
+    skipped: rows.filter((r) => r.skipped).map((r) => r.stop_id),
+  };
+}
+
+// ------------------------------------------------------------------ trail
+
+const PIECE = 200;
+
+/**
+ * What has already been written, per trip: "seg:piece" -> point count. The
+ * trail only grows at its end, so comparing lengths finds the one or two
+ * pieces that changed since the last mirror and nothing else is rewritten.
+ * Lost on restart, which only costs one full rewrite.
+ */
+const written = new Map<number, Map<string, number>>();
+
+/** Mirror the trail so a restart does not wipe the line behind the bus. */
+export async function savePath(tripId: number, segs: TrailSeg[]): Promise<void> {
+  let done = written.get(tripId);
+  if (!done) { done = new Map(); written.set(tripId, done); }
+  for (let s = 0; s < segs.length; s++) {
+    const seg = segs[s];
+    for (let p = 0; p * PIECE < seg.pts.length; p++) {
+      // Each piece repeats the last point of the one before, so the pieces
+      // join up into one line when drawn or reassembled.
+      const from = Math.max(0, p * PIECE - (p > 0 ? 1 : 0));
+      const pts = seg.pts.slice(from, (p + 1) * PIECE);
+      const key = `${s}:${p}`;
+      if (done.get(key) === pts.length) continue;
+      await sql(
+        `INSERT INTO trip_path (trip_id, seg, piece, kind, pts) VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (trip_id, seg, piece) DO UPDATE SET pts = EXCLUDED.pts, kind = EXCLUDED.kind`,
+        [tripId, s, p, seg.kind, JSON.stringify(pts.map(([x, y]) => [+x.toFixed(6), +y.toFixed(6)]))],
+      );
+      done.set(key, pts.length);
+    }
+  }
+}
+
+/** The trail as saved, for a restarted server. Empty if there is none. */
+export async function loadPath(tripId: number): Promise<TrailSeg[]> {
+  const rows = await sql<{ seg: number; piece: number; kind: 'road' | 'gps'; pts: [number, number][] }>(
+    `SELECT seg, piece, kind, pts FROM trip_path WHERE trip_id = $1 ORDER BY seg, piece`, [tripId]);
+  const segs: TrailSeg[] = [];
+  for (const r of rows) {
+    let seg = segs[r.seg];
+    if (!seg) { seg = { kind: r.kind, pts: [], t1: 0 }; segs[r.seg] = seg; }
+    // Drop the repeated joining point when stitching pieces back together.
+    seg.pts.push(...(r.piece > 0 ? r.pts.slice(1) : r.pts));
+  }
+  return segs.filter(Boolean);
+}
+
+/** Forget what was written for a trip that has ended. */
+export function forgetPath(tripId: number) { written.delete(tripId); }

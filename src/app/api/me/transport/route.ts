@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { one, sql } from '@/lib/db';
 import { requireSession } from '@/lib/guard';
 import { engine } from '@/lib/engine';
+import { routeColorFor } from '@/lib/brand';
 import { getRoute } from '@/lib/network';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +53,10 @@ export async function GET(req: Request) {
   const route = await one<RouteRow>(
     'SELECT id, name, code, color, sched_start FROM routes WHERE id = $1', [session.routeId]);
   const driver = await one<DriverRow>(
-    'SELECT name, phone FROM drivers WHERE route_id = $1 AND active LIMIT 1', [session.routeId]);
+    // A bus can have a stand-in driver; the one who signed in most recently
+    // is the one driving today.
+    `SELECT name, phone FROM drivers WHERE route_id = $1 AND active
+      ORDER BY last_login_at DESC NULLS LAST, created_at LIMIT 1`, [session.routeId]);
 
   // The student's own boarding point. Drivers have no stop of their own.
   let myStop: StopRow | null = null;
@@ -83,7 +87,10 @@ export async function GET(req: Request) {
     && (raw.trip.confidence === 'live' || raw.trip.confidence === 'recent');
   const geo = getRoute(session.routeId);
 
-  let eta: { seconds: number; clock: string; stopsAway: number; passed: boolean } | null = null;
+  let eta: {
+    seconds: number; clock: string; stopsAway: number; passed: boolean;
+    state: 'served' | 'skipped' | 'likely-skipped' | 'upcoming';
+  } | null = null;
   if (view?.trip && myStop) {
     const hit = view.stops.find((s) => s.id === myStop!.id);
     if (hit) {
@@ -91,8 +98,12 @@ export async function GET(req: Request) {
         seconds: hit.etaS ?? 0,
         clock: hit.etaS == null ? '' : new Date(Date.now() + hit.etaS * 1000)
           .toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        stopsAway: Math.max(0, myStop.seq - (view.trip.nextStopSeq ?? 0)),
+        // Stops still to be served before this one. Counting by sequence
+        // number included stops the bus had skipped, so a student was told
+        // "4 stops away" with the bus one stop from them.
+        stopsAway: view.stops.filter((s) => s.state === 'upcoming' && s.seq < hit.seq).length,
         passed: hit.passed,
+        state: hit.state,
       };
     }
   }
@@ -102,7 +113,7 @@ export async function GET(req: Request) {
       role: session.role,
       name: session.name,
       route: route && {
-        id: route.id, code: route.code, name: route.name, color: route.color,
+        id: route.id, code: route.code, name: route.name, color: routeColorFor(session.role, route.color),
         startTime: start,
         stopCount: stops.length,
         lengthKm: geo ? Math.round(geo.lengthM / 100) / 10 : null,

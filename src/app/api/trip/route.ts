@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   if (!g.ok) return g.res;
   await ensureLive();
 
-  let body: { action?: string; speed?: number };
+  let body: { action?: string; speed?: number; skipSpur?: boolean };
   try { body = await req.json(); } catch {
     return NextResponse.json({ error: 'malformed request body' }, { status: 400 });
   }
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       // What the driver sees when he stops: not a blank screen, a run.
       const summary = Number.isFinite(id)
         ? await one<{ stops: string; first: string | null; last: string | null; avg: string | null }>(
-            `SELECT count(*) AS stops,
+            `SELECT count(*) FILTER (WHERE NOT skipped) AS stops,
                     min(reached_at)::text AS first,
                     max(reached_at)::text AS last,
                     round(avg(delay_s))::text AS avg
@@ -80,12 +80,18 @@ export async function POST(req: Request) {
     // a real recorded ride; the others drive their own road line at the
     // timetable's pace. Office only, and it says which kind it is.
     case 'replay': {
-      const trace = demoTrace(key);
+      const trace = demoTrace(key, { skipSpur: body?.skipSpur === true });
       if (!trace) return NextResponse.json({ error: 'no route to replay' }, { status: 404 });
+      if (body?.skipSpur === true && !trace.cutS) {
+        return NextResponse.json({
+          error: 'This route has no village it goes out to and back from, so there is nothing to skip.',
+        }, { status: 422 });
+      }
       engine.startReplay(key, trace.points, Math.max(1, Math.min(120, speed)));
       return NextResponse.json({
         ok: true, status: 'replaying', speed,
         points: trace.points.length, source: trace.source, direction,
+        skippedSpurS: trace.cutS ?? null,
       });
     }
 

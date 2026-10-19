@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { getRoute, getNetwork } from '@/lib/network';
+import { routeColorFor } from '@/lib/brand';
 import { TrackClient } from './TrackClient';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,8 @@ export default async function TrackPage({
 }) {
   const session = await getSession();
   if (!session) redirect('/login');
+  // Home is where a first password gets replaced; nothing else opens before.
+  if (session.mustChangePassword && session.role !== 'admin') redirect('/');
 
   const net = getNetwork();
   // Admins have no route of their own. They can name one — that is how the
@@ -48,7 +51,7 @@ export default async function TrackPage({
   const initialRoute = route
     ? {
         id: route.id,
-        color: route.color,
+        color: routeColorFor(session.role, route.color),
         shape: route.shape,
         stops: route.stops.map((s) => ({
           id: s.id, name: s.name, lat: s.lat, lng: s.lng, estimated: s.estimated,

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getRoute } from '@/lib/network';
+import { routeColorFor } from '@/lib/brand';
 import { requireSession } from '@/lib/guard';
 
 /**
@@ -25,7 +26,7 @@ export async function GET(
   if (!route) return NextResponse.json({ error: 'unknown route' }, { status: 404 });
 
   const { cum, profile, ...rest } = route;
-  return NextResponse.json(rest, {
+  return NextResponse.json({ ...rest, color: routeColorFor(g.session.role, rest.color) }, {
     headers: {
       // NOT a long max-age. This payload changes whenever the route is
       // re-seeded, and a cached copy means the browser keeps drawing

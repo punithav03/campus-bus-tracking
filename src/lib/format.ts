@@ -43,6 +43,19 @@ export function fmtAge(s: number): string {
   return `${Math.floor(m / 60)}h ago`;
 }
 
+/**
+ * A plain duration — "40s", "3 min", "1h 5m".
+ *
+ * fmtAge says "3 min ago", which reads as the wrong tense inside a sentence
+ * like "nothing has reached the server for …". Same arithmetic, no suffix.
+ */
+export function fmtGap(s: number): string {
+  if (s < 60) return `${Math.max(0, Math.round(s))}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
 export function fmtDelay(s: number | null | undefined): string {
   if (s == null) return '—';
   const m = Math.round(Math.abs(s) / 60);

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { haptic } from '@/lib/device';
 import { usePush } from '@/lib/usePush';
 
@@ -15,6 +16,25 @@ import { usePush } from '@/lib/usePush';
  */
 export function NotifyCard() {
   const { state, leadMin, error, enable, disable, setLead } = usePush();
+  const [test, setTest] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+
+  // One sample card, end to end through the real push service, so a student
+  // knows tomorrow's alert will arrive instead of hoping it does.
+  const sendTest = async () => {
+    haptic('select');
+    setTest('sending');
+    try {
+      const r = await fetch('/api/push/test', { method: 'POST' });
+      const j = await r.json().catch(() => ({}));
+      setTest(r.ok ? 'sent' : 'failed');
+      setTestMsg(r.ok ? 'Sent. It should appear in a few seconds.' : (j.error ?? 'Could not send.'));
+    } catch {
+      setTest('failed');
+      setTestMsg('No connection.');
+    }
+    setTimeout(() => setTest('idle'), 6000);
+  };
 
   if (state === 'unsupported' || state === 'unavailable') return null;
 
@@ -35,10 +55,10 @@ export function NotifyCard() {
           </div>
           <div className="nt-sub">
             {state === 'on'
-              ? `${leadMin} minutes before it reaches your stop — even with the app closed.`
+              ? `A live card that counts the bus down to your stop, and a buzz ${leadMin} minutes before it gets there — even with the app closed.`
               : state === 'blocked'
                 ? 'Notifications are blocked for this site.'
-                : 'A notification when it sets off, and again when it is nearly at your stop.'}
+                : 'One live card that counts the bus down to your stop, and buzzes when it is time to leave.'}
           </div>
         </div>
       </div>
@@ -69,8 +89,19 @@ export function NotifyCard() {
         </div>
       )}
 
+      {state === 'on' && testMsg && test !== 'idle' && (
+        <div className="note" style={{ margin: '0 17px 12px', borderLeftColor: test === 'failed' ? 'var(--bad)' : 'var(--live)' }}>
+          {testMsg}
+        </div>
+      )}
+
       {state !== 'blocked' && (
         <div className="nt-foot">
+          {state === 'on' && (
+            <button className="btn" disabled={test === 'sending'} onClick={() => void sendTest()}>
+              {test === 'sending' ? 'Sending…' : 'Send a test'}
+            </button>
+          )}
           <button
             className="btn"
             data-primary={state !== 'on' ? 'true' : undefined}

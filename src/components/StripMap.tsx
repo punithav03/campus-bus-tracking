@@ -157,6 +157,7 @@ export function StripMap({
           className="strow"
           style={{ ['--c' as string]: color, height: ROW_H }}
           data-passed={s.passed}
+          data-state={s.state}
           data-just={justPassed.has(s.id) || undefined}
           data-mine={!!onPick && s.id === myStopId}
           data-pick={!!onPick}
@@ -176,6 +177,11 @@ export function StripMap({
           </div>
           <div className="strow-name">
             {s.name}
+            {s.extra && (
+              <span className="strow-extra" title="Students board here; it is not on the office's timetable, so its time is worked out from the stops either side">
+                not on timetable
+              </span>
+            )}
             {s.estimated && (
               <span
                 title="Position estimated — recording the route will place it exactly"
@@ -185,7 +191,17 @@ export function StripMap({
               </span>
             )}
           </div>
-          {s.passed ? (
+          {s.state === 'skipped' ? (
+            // Its own word. "Passed" with no time used to be the only thing
+            // a skipped stop could show, which read as "you missed it".
+            <div className="strow-eta-skipped" title="The bus went on without coming to this stop">
+              skipped
+            </div>
+          ) : s.state === 'likely-skipped' ? (
+            <div className="strow-eta-skipped" title="The bus has left its route and is moving away from this stop">
+              may skip
+            </div>
+          ) : s.passed ? (
             <div
               className="strow-eta-passed num"
               title={

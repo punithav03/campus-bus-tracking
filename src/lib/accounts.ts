@@ -127,6 +127,9 @@ export async function changePassword(
   session: Session, current: string, next: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (next.length < 6) return { ok: false, error: 'Use at least 6 characters.' };
+  if (next.trim().toUpperCase() === session.sub.trim().toUpperCase()) {
+    return { ok: false, error: 'Pick something other than your ID.' };
+  }
 
   const acc = await find(session.sub);
   if (!acc) return { ok: false, error: 'Account not found.' };

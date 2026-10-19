@@ -34,7 +34,10 @@ interface Transport {
               pickup: string; drop: string } | null;
   live: { confidence: string; progress: number; delayS: number;
           nextStop: string | null; ageS: number; speedMps?: number | null } | null;
-  eta: { seconds: number; clock: string; stopsAway: number; passed: boolean } | null;
+  eta: {
+    seconds: number; clock: string; stopsAway: number; passed: boolean;
+    state?: 'served' | 'skipped' | 'likely-skipped' | 'upcoming';
+  } | null;
   message?: string;
 }
 
@@ -150,6 +153,20 @@ function HomeInner() {
                   ? ` · running ${fmtMins(Math.abs(live.delayS))} ${live.delayS > 0 ? 'late' : 'early'}`
                   : ' · on time'}
               </div>
+            </>
+          ) : live && eta?.state === 'skipped' ? (
+            // Not "passed" — that means you missed it. This means it never
+            // came, and the student should hear that plainly.
+            <>
+              <div className="ti-kicker">Your stop</div>
+              <div className="ti-big ti-big-sm">Bus did not come today</div>
+              <div className="ti-meta">It went on to {live.nextStop ?? 'the campus'} without stopping at yours</div>
+            </>
+          ) : live && eta?.state === 'likely-skipped' ? (
+            <>
+              <div className="ti-kicker">Your stop</div>
+              <div className="ti-big ti-big-sm">Bus may not come</div>
+              <div className="ti-meta">It has left its usual route and is moving away from your stop</div>
             </>
           ) : live && eta?.passed ? (
             <>

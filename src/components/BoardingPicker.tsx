@@ -19,6 +19,8 @@ import { haptic } from '@/lib/device';
 
 export interface StopOption {
   id: string; name: string; seq: number; estimated: boolean;
+  /** Students board here, but the office's timetable does not list it. */
+  extra?: boolean;
   pickup: string;
 }
 interface RouteInfo { id: string; code: string; name: string; color: string }
@@ -116,6 +118,7 @@ export function BoardingPicker({
               <span className="bp-stop-name">
                 {s.name}
                 {s.estimated && <span className="ti-approx" title="Position is approximate">~</span>}
+                {s.extra && <span className="bp-extra" title="Students board here; the bus passes it, but it is not on the office's timetable, so the time is worked out from the stops either side">not on timetable</span>}
               </span>
               <span className="bp-times num">{s.pickup}</span>
             </button>

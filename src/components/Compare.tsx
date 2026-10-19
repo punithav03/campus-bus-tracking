@@ -45,8 +45,9 @@ export function Compare({
         <div className="card-body">
           <div className="empty" style={{ padding: '28px 8px' }}>
             <strong style={{ color: 'var(--text)', fontSize: 15 }}>
-              Bus has passed {stop.name}
-              {stop.arrivedAt ? ` at ${fmtClock(stop.arrivedAt)}` : ''}
+              {stop.state === 'skipped'
+                ? <>Bus skipped {stop.name}</>
+                : <>Bus has passed {stop.name}{stop.arrivedAt ? ` at ${fmtClock(stop.arrivedAt)}` : ''}</>}
             </strong>
             <br />
             Pick a stop further along the route to compare arrival times.

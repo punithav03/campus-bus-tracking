@@ -2,6 +2,7 @@ import webpush from 'web-push';
 import { sql } from './db';
 import type { StateView } from './types';
 import type { Direction } from './trip-store';
+import { cardFor, type Alert } from './push-plan';
 
 /**
  * Telling a student the bus is coming, without them opening anything.
@@ -22,8 +23,10 @@ import type { Direction } from './trip-store';
  *   than silence, because the student trusted it. Anything past the
  *   threshold is dropped rather than sent apologetically.
  *
- *   NEVER NOISY. Three kinds, total: it started, it is nearly at your stop,
- *   it reached the college. Nothing else earns an interruption.
+ *   NEVER NOISY. Four kinds, total: it started, it is nearly at your stop,
+ *   it went on WITHOUT coming to your stop, it reached the college. Nothing
+ *   else earns an interruption — and the skipped one earns it most, because
+ *   it is the only one that tells a student to stop waiting.
  */
 
 let configured = false;
@@ -37,26 +40,64 @@ function configure(): boolean {
   return true;
 }
 
-export type Kind = 'started' | 'approaching' | 'arrived';
+export type Kind = Alert;
 
 interface Sub {
   endpoint: string; p256dh: string; auth: string;
   roll_no: string; lead_min: number;
 }
 
+/** What goes to the service worker, which turns it into the notification. */
+export interface PushPayload {
+  title: string;
+  body: string;
+  /** One card per trip: the same tag replaces the old card instead of stacking. */
+  tag: string;
+  url: string;
+  image?: string | null;
+  /** Buzz (an alert) or change the card quietly (an update). */
+  alert: boolean;
+  kind: string;
+  actions?: { action: string; title: string }[];
+  timestamp: number;
+}
+
+/**
+ * Dry run: write what would be sent to data/push-dry-run.jsonl instead of
+ * sending. For testing the whole flow with a demo replay and no phone.
+ */
+const DRY = process.env.PUSH_DRY_RUN === '1';
+
 /**
  * Sends one payload to one device.
+ *
+ * Alerts go out at high urgency, so a phone in battery saver still wakes for
+ * "leave now". Updates are normal urgency and carry a topic: if the phone is
+ * offline, the push service keeps only the newest update rather than
+ * delivering five stale ones when it reconnects.
  *
  * A 404 or 410 means the browser threw the subscription away — the student
  * cleared site data, or uninstalled. Those are not errors to retry; they are
  * rows to delete, and keeping them would mean pushing to the dead forever.
  */
-async function deliver(sub: Sub, payload: object): Promise<boolean> {
+async function deliver(sub: Sub, payload: PushPayload): Promise<boolean> {
+  if (DRY) {
+    const { appendFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    appendFileSync(join(process.cwd(), 'data', 'push-dry-run.jsonl'),
+      `${JSON.stringify({ at: new Date().toISOString(), roll: sub.roll_no, ...payload })}\n`);
+    return true;
+  }
   try {
     await webpush.sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
       JSON.stringify(payload),
-      { TTL: 300 },      // useless after five minutes; do not let it linger
+      {
+        TTL: payload.alert ? 300 : 120,   // useless once stale; do not let it linger
+        urgency: payload.alert ? 'high' : 'normal',
+        // At most 32 URL-safe characters; one per card.
+        topic: payload.tag.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32),
+      },
     );
     await sql('UPDATE push_subscriptions SET last_sent_at = now(), failures = 0 WHERE endpoint = $1',
       [sub.endpoint]);
@@ -76,19 +117,26 @@ async function deliver(sub: Sub, payload: object): Promise<boolean> {
 }
 
 /**
- * Claims the right to send. Returns false if somebody already did.
+ * Claims the right to send an alert. Returns false if somebody already did.
  *
  * The insert IS the lock. Checking first and sending second would let two
  * ticks overlapping by a millisecond both decide they were first, and the
- * student gets told twice.
+ * student gets told twice. It also survives a restart, which the in-memory
+ * card state below does not.
  */
-async function claim(tripId: number, roll: string, kind: Kind): Promise<boolean> {
+async function claim(tripId: number, roll: string, kind: string): Promise<boolean> {
   const rows = await sql(
     `INSERT INTO notifications_sent (trip_id, roll_no, kind) VALUES ($1,$2,$3)
      ON CONFLICT DO NOTHING RETURNING roll_no`,
     [tripId, roll, kind],
   );
   return rows.length > 0;
+}
+
+async function alreadySent(tripId: number, roll: string): Promise<Set<Alert>> {
+  const rows = await sql<{ kind: string }>(
+    'SELECT kind FROM notifications_sent WHERE trip_id = $1 AND roll_no = $2', [tripId, roll]);
+  return new Set(rows.map((r) => (r.kind === 'approaching' ? 'leave' : r.kind) as Alert));
 }
 
 async function subsFor(rolls: string[]): Promise<Map<string, Sub[]>> {
@@ -108,11 +156,19 @@ async function subsFor(rolls: string[]): Promise<Map<string, Sub[]>> {
 }
 
 /**
- * Works through one running trip and tells whoever needs telling.
- *
- * Called from the live ticker every fifteen seconds. Almost every call does
- * nothing, which is correct — the interesting moment for any given student
- * happens once per trip.
+ * The live card's last state per student, so a quiet update is only sent when
+ * something a student would notice has changed — the minutes, the stops away —
+ * and never more than about once every 45 seconds. In memory: after a restart
+ * the worst case is one extra quiet update.
+ */
+interface CardState { sent: Set<Alert>; etaMin: number | null; stopsAway: number | null; at: number; title: string; done: boolean }
+const cards = new Map<string, CardState>();
+const UPDATE_MIN_GAP_MS = 45_000;
+const UPDATE_MAX_GAP_MS = 150_000;
+
+/**
+ * Works through one running trip and keeps every subscribed student's card
+ * up to date. Called from the live ticker every fifteen seconds.
  */
 export async function notifyForTrip(
   tripId: number,
@@ -120,87 +176,110 @@ export async function notifyForTrip(
   direction: Direction,
   view: StateView,
 ): Promise<void> {
-  if (!configure()) return;
-  const trip = view.trip;
-  if (!trip) return;
+  if (!DRY && !configure()) return;
+  if (!view.trip) return;
+  void direction;
 
-  // Everyone on this route who has asked to be told, with their own stop.
-  const students = await sql<{ roll_no: string; name: string; stop_id: string | null }>(
-    `SELECT s.roll_no, s.name, s.stop_id
+  // Everyone on this bus who has asked to be told.
+  const students = await sql<{ roll_no: string; stop_id: string | null }>(
+    `SELECT s.roll_no, s.stop_id
        FROM students s
-      WHERE s.route_id = $1 AND s.stop_id IS NOT NULL
+      WHERE s.route_id = $1
         AND EXISTS (SELECT 1 FROM push_subscriptions p WHERE p.roll_no = s.roll_no)`,
     [routeId],
   );
   if (!students.length) return;
-
   const subs = await subsFor(students.map((s) => s.roll_no));
-  const byStop = new Map(view.stops.map((s) => [s.id, s]));
-  const routeName = view.route.short || view.route.name;
-
+  const now = Date.now();
 
   for (const st of students) {
-    const mine = st.stop_id ? byStop.get(st.stop_id) : null;
     const devices = subs.get(st.roll_no) ?? [];
     if (!devices.length) continue;
+    const key = `${tripId}:${st.roll_no}`;
+    let state = cards.get(key);
+    if (!state) {
+      state = { sent: await alreadySent(tripId, st.roll_no), etaMin: null, stopsAway: null, at: 0, title: '', done: false };
+      cards.set(key, state);
+    }
+    if (state.done) continue;
 
-    // ---- the bus has set off ------------------------------------------
-    // Only worth saying early in the run; a student opening the app at the
-    // halfway point does not need to be told it started twenty minutes ago.
-    if (trip.progress < 0.12 && await claim(tripId, st.roll_no, 'started')) {
-      for (const d of devices) {
-        await deliver(d, {
-          kind: 'started',
-          title: `${routeName} has started`,
-          body: mine ? `Heading for ${mine.name}.` : 'Your bus is on the way.',
-          tag: `trip-${tripId}-started`,
-          url: '/track',
-        });
-      }
+    // The earliest warning any of their devices asked for.
+    const lead = Math.max(1, Math.min(30, Math.max(...devices.map((d) => d.lead_min))));
+    const card = cardFor({ view, stopId: st.stop_id, leadMin: lead, sent: state.sent, now });
+    if (!card) continue;
+
+    let alert = card.alert;
+    if (alert && !await claim(tripId, st.roll_no, alert)) {
+      state.sent.add(alert);
+      alert = null;     // already sent (another tick, or before a restart): quiet update
     }
 
-    // ---- nearly at your stop -------------------------------------------
-    if (!mine || mine.passed || mine.etaS == null) continue;
+    const changed = card.etaMin !== state.etaMin || card.stopsAway !== state.stopsAway;
+    const gap = now - state.at;
+    const update = !alert && card.phase === 'live' &&
+      ((changed && gap >= UPDATE_MIN_GAP_MS) || gap >= UPDATE_MAX_GAP_MS);
+    // A closing card ("left your stop at 08:20") replaces the live one, once.
+    const final = !alert && card.phase === 'done' && state.at > 0 && card.title !== state.title;
+    if (!alert && !update && !final) continue;
 
-    // Each device carries its own warning time, because the student set it:
-    // five minutes is a walk down the lane, fifteen is a cycle ride.
-    for (const d of devices) {
-      const lead = Math.max(1, Math.min(30, d.lead_min));
-      const mins = mine.etaS / 60;
-      // A window, not a threshold. Below the floor the bus is effectively
-      // there and the message would arrive as it pulls away.
-      if (mins > lead || mins < lead - 4) continue;
-      if (!await claim(tripId, st.roll_no, 'approaching')) break;
+    const payload: PushPayload = {
+      title: card.title,
+      body: card.body,
+      tag: `bus-${tripId}`,
+      url: '/track',
+      image: card.image,
+      alert: !!alert,
+      kind: alert ?? (card.phase === 'done' ? 'final' : 'update'),
+      actions: card.canWait
+        ? [{ action: 'track', title: 'Track live' }, { action: 'waiting', title: "I'm at the stop" }]
+        : [{ action: 'track', title: 'Open' }],
+      timestamp: now,
+    };
+    for (const d of devices) await deliver(d, payload);
 
-      await deliver(d, {
-        kind: 'approaching',
-        title: `Bus ${Math.max(1, Math.round(mins))} min away`,
-        body: `Leave now for ${mine.name}.`,
-        tag: `trip-${tripId}-approaching`,
-        url: '/track',
-        requireInteraction: false,
-      });
-      break;   // one per student, whichever device got there first
-    }
+    if (alert) state.sent.add(alert);
+    state.etaMin = card.etaMin;
+    state.stopsAway = card.stopsAway;
+    state.at = now;
+    state.title = card.title;
+    // Nothing more to say after the college arrival or a skip. After "left
+    // your stop" the card stays open for the college arrival.
+    if (alert === 'arrived' || alert === 'skipped') state.done = true;
   }
 
-  // ---- reached the college -------------------------------------------
-  const last = view.stops[view.stops.length - 1];
-  if (last?.arrivedAt) {
-    for (const st of students) {
-      if (!await claim(tripId, st.roll_no, 'arrived')) continue;
-      for (const d of subs.get(st.roll_no) ?? []) {
-        await deliver(d, {
-          kind: 'arrived',
-          title: 'Bus reached the college',
-          body: new Date(last.arrivedAt).toLocaleTimeString('en-IN',
-            { hour: '2-digit', minute: '2-digit', hour12: false }),
-          tag: `trip-${tripId}-arrived`,
-          url: '/',
-        });
-      }
-    }
+  if (cards.size > 5000) {
+    for (const [k, v] of cards) if (now - v.at > 6 * 3600_000) cards.delete(k);
   }
+}
+
+/**
+ * A sample card on every device of one student — "Send a test" in the app.
+ * Proves the whole chain (permission, subscription, push service, service
+ * worker) end to end, so nobody finds out on the morning it matters.
+ */
+export async function sendTest(roll: string, routeName: string, stopName: string | null): Promise<number> {
+  if (!DRY && !configure()) return 0;
+  const devices = (await subsFor([roll])).get(roll) ?? [];
+  const q = new URLSearchParams({
+    c: 'f97316', p: '420', s: '0.150.300.420.560.700.850.1000', m: '700',
+    n: stopName ?? 'Your stop', e: '6', st: 'live', r: routeName,
+  });
+  let ok = 0;
+  for (const d of devices) {
+    const sent = await deliver(d, {
+      title: `${routeName} · 6 min to ${stopName ?? 'your stop'}`,
+      body: 'This is a test. On the day this card updates by itself as the bus comes, and buzzes when it is time to leave.',
+      tag: 'bus-test',
+      url: '/track',
+      image: `/api/push/card?${q.toString()}`,
+      alert: true,
+      kind: 'test',
+      actions: [{ action: 'track', title: 'Track live' }, { action: 'dismiss', title: 'Got it' }],
+      timestamp: Date.now(),
+    });
+    if (sent) ok++;
+  }
+  return ok;
 }
 
 export const pushConfigured = () => configure();

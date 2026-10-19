@@ -23,7 +23,10 @@
  *  · /api is never cached. A stale bus position is worse than none.
  */
 
-const CACHE = 'campusbus-v6';
+const CACHE = 'campusbus-v9';
+// The basemap lives in its own cache: 12 MB that must survive app updates,
+// replaced only when a new map file (a new name) ships.
+const MAP_CACHE = 'campusbus-map';
 const PAGE_TIMEOUT_MS = 2500;
 
 self.addEventListener('install', (e) => {
@@ -34,7 +37,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))),
+      Promise.all(keys.filter((k) => k !== CACHE && k !== MAP_CACHE).map((k) => caches.delete(k))),
     ),
   );
   self.clients.claim();
@@ -60,6 +63,13 @@ self.addEventListener('fetch', (event) => {
 
   // Live data must never come from a cache.
   if (url.pathname.startsWith('/api/')) return;
+
+  // The map file is read in small byte ranges, one per tile. Served from a
+  // full copy kept on the phone, the map works with no signal at all.
+  if (url.pathname.startsWith('/maps/') && url.pathname.endsWith('.pmtiles')) {
+    event.respondWith(mapRange(event, request, url.pathname));
+    return;
+  }
 
   // Nor may the App Router's own navigation payloads. Clicking a tab does not
   // fetch a page — it fetches an RSC payload from the SAME url as the page,
@@ -108,6 +118,53 @@ self.addEventListener('fetch', (event) => {
 
 
 /* ==========================================================================
+   OFFLINE MAP
+   ========================================================================== */
+
+/** The whole map file, once read from the cache, so each tile is a cheap slice. */
+let mapBlob = null;
+let mapBlobPath = null;
+let mapFetching = null;
+
+async function mapRange(event, request, path) {
+  const cache = await caches.open(MAP_CACHE);
+  if (mapBlobPath !== path) {
+    const hit = await cache.match(path);
+    mapBlob = hit ? await hit.blob() : null;
+    mapBlobPath = hit ? path : null;
+  }
+  if (!mapBlob) {
+    // First visit: answer from the network now, and fetch the whole file once
+    // in the background for next time. Older map files are dropped then.
+    if (!mapFetching) {
+      mapFetching = fetch(path).then(async (r) => {
+        if (r.status !== 200) return;
+        await cache.put(path, r.clone());
+        for (const k of await cache.keys()) if (new URL(k.url).pathname !== path) await cache.delete(k);
+      }).catch(() => {}).finally(() => { mapFetching = null; });
+      event.waitUntil(mapFetching);
+    }
+    return fetch(request);
+  }
+  const range = /bytes=(\d+)-(\d*)/.exec(request.headers.get('Range') || '');
+  if (!range) return new Response(mapBlob, { status: 200, headers: { 'Content-Type': 'application/octet-stream' } });
+  const size = mapBlob.size;
+  const start = Number(range[1]);
+  const end = Math.min(range[2] ? Number(range[2]) : size - 1, size - 1);
+  if (start >= size) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+  return new Response(mapBlob.slice(start, end + 1), {
+    status: 206,
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      'Content-Range': `bytes ${start}-${end}/${size}`,
+      'Content-Length': String(end - start + 1),
+      'Accept-Ranges': 'bytes',
+    },
+  });
+}
+
+
+/* ==========================================================================
    PUSH
    The only part of this app that reaches a student who is not looking at it.
    ========================================================================== */
@@ -117,18 +174,24 @@ self.addEventListener('push', (event) => {
   try { d = event.data ? event.data.json() : {}; } catch { /* keep the default */ }
 
   const title = d.title || 'SVPCET Bus';
+  const alert = d.alert !== false;
   const options = {
     body: d.body || '',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
-    // A tag replaces rather than stacks. Three "bus is coming" notifications
-    // from three ticks would be the fastest way to get push switched off for
-    // good by the person who most needed it.
+    // The route picture: Chrome on Android shows it when the card is expanded.
+    image: d.image ? new URL(d.image, self.location.origin).href : undefined,
+    // ONE card per trip. A new message with the same tag replaces the card
+    // rather than stacking another under it — the way a ride-hailing app keeps
+    // a single "your driver is 4 min away" card current.
     tag: d.tag || 'svpcet-bus',
-    renotify: true,
-    // Vibration is the point: the phone is in a pocket at a bus stop and
-    // nobody is watching the screen.
-    vibrate: [90, 50, 90],
+    // Alerts buzz; updates change the card quietly. Buzzing on every minute
+    // tick is the fastest way to get notifications switched off for good.
+    renotify: alert,
+    silent: !alert,
+    vibrate: alert ? [120, 60, 120] : undefined,
+    timestamp: d.timestamp || Date.now(),
+    actions: Array.isArray(d.actions) ? d.actions.slice(0, 2) : [],
     data: { url: d.url || '/', kind: d.kind || 'info' },
     requireInteraction: false,
   };
@@ -137,9 +200,32 @@ self.addEventListener('push', (event) => {
 });
 
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || '/';
+  const n = event.notification;
+  const url = (n.data && n.data.url) || '/';
 
+  if (event.action === 'dismiss') { n.close(); return; }
+
+  // "I'm at the stop", straight from the notification: tell the driver
+  // without opening anything, then confirm on the same card.
+  if (event.action === 'waiting') {
+    event.waitUntil((async () => {
+      let ok = false;
+      try {
+        const r = await fetch('/api/me/waiting', { method: 'POST', credentials: 'include' });
+        ok = r.ok;
+      } catch { /* offline */ }
+      await self.registration.showNotification(ok ? 'Driver told you are waiting' : 'Could not reach the server', {
+        body: ok ? 'Your stop will show as waiting on the driver\'s screen.' : 'Open the app and tap "I\'m at the stop".',
+        icon: '/icon-192.png', badge: '/icon-192.png',
+        tag: n.tag, silent: true, renotify: false,
+        actions: [{ action: 'track', title: 'Track live' }],
+        data: n.data,
+      });
+    })());
+    return;
+  }
+
+  n.close();
   // Reuse a tab that is already open rather than piling up new ones — the
   // student taps this every morning.
   event.waitUntil((async () => {

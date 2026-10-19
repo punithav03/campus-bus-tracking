@@ -1,7 +1,8 @@
 import { engine } from './engine';
 import { getRoute } from './network';
 import {
-  runningTrips, beat, recordStopEvents, closeTrip, type Direction,
+  runningTrips, beat, recordStopEvents, closeTrip, savePath, loadPath, stopHistory, forgetPath,
+  type Direction,
 } from './trip-store';
 import { notifyForTrip } from './push';
 import { sql } from './db';
@@ -23,8 +24,22 @@ import { sql } from './db';
  */
 
 const TICK_MS = 15_000;
-/** Past this with no fix, the bus is not being tracked any more. */
-const STALE_MS = 4 * 60_000;
+/**
+ * Past this with no fix, the run is over: the phone died, or the driver went
+ * home without pressing End.
+ *
+ * This used to be FOUR MINUTES, and that silently killed real runs. A bus
+ * that drove through a five-minute dead zone had its trip closed behind its
+ * back — and when the phone came back into signal with a pocketful of
+ * buffered fixes, ingest refused every one of them, because they belonged to
+ * a trip that was now finished. The rest of the morning, the bus was gone.
+ *
+ * The map does not need this to be honest: the freshness badge already says
+ * "last seen 6 min ago" and the marker stops moving at 45 s. Closing the trip
+ * is only about cleaning up, so it can afford to wait for a gap no dead zone
+ * on these roads comes near.
+ */
+const STALE_MS = 45 * 60_000;
 
 let booted: Promise<void> | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -69,6 +84,15 @@ async function rehydrate() {
     const age = Date.now() - (t.lastFixAt ?? t.startedAt);
     if (age > 6 * 3600_000) { await closeTrip(t.id, 'abandoned'); continue; }
 
+    // History and the trail come back too. Without them a restarted server
+    // showed every stop behind the bus as merely "passed", forgot which were
+    // skipped, and drew no line behind the bus at all.
+    const route = getRoute(key);
+    const [hist, trail] = await Promise.all([
+      stopHistory(t.id).catch(() => ({ served: [], skipped: [] })),
+      loadPath(t.id).catch(() => []),
+    ]);
+    const seqOf = new Map(route?.stops.map((s) => [s.id, s.seq]) ?? []);
     engine.restore(key, {
       id: String(t.id),
       startedAt: t.startedAt,
@@ -78,9 +102,26 @@ async function rehydrate() {
       lng: t.lng,
       bearing: t.bearing ?? 0,
       lastFixAt: t.lastFixAt ?? t.startedAt,
+      events: hist.served.filter((e) => seqOf.has(e.stopId)).map((e) => ({
+        stopId: e.stopId, seq: seqOf.get(e.stopId)!, arrivedAt: e.reachedAt,
+        departedAt: e.reachedAt, delayS: e.delayS ?? 0,
+        // Not stored, and it only changes a word on screen. Unknown reads as
+        // "went past", which never claims a pick-up we did not see.
+        halted: false,
+      })),
+      skipped: hist.skipped.filter((id) => seqOf.has(id)).map((id) => seqOf.get(id)!),
+      trail,
     });
-    console.log(`[live] restored ${key} at ${(t.distAlongM / 1000).toFixed(1)} km`);
+    console.log(`[live] restored ${key} at ${(t.distAlongM / 1000).toFixed(1)} km` +
+      ` (${hist.served.length} served, ${hist.skipped.length} skipped, ${trail.length} trail pieces)`);
   }
+}
+
+/** A stable made-up trip number for a demo replay (testing pushes only). */
+function replayTripNo(id: string): number {
+  let h = 0;
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return 900_000_000 + (h % 99_999_999);
 }
 
 async function tick() {
@@ -89,7 +130,16 @@ async function tick() {
       const view = engine.view(key);
       if (!view?.trip) continue;
       const tripId = Number(trip.id);
-      if (!Number.isFinite(tripId)) continue;     // a replay, not a real run
+      if (!Number.isFinite(tripId)) {
+        // A demo replay, not a real run: nothing is written for it. With
+        // PUSH_ON_REPLAY=1 (testing only) its notifications still go out, under
+        // a stable made-up trip number, so the live card can be tried any time.
+        if (process.env.PUSH_ON_REPLAY === '1') {
+          await notifyForTrip(replayTripNo(trip.id), key, 'outbound', view)
+            .catch((e) => console.error('[live] replay push:', (e as Error).message));
+        }
+        continue;
+      }
 
       const routeId = key;
       const direction: Direction = 'outbound';
@@ -107,8 +157,13 @@ async function tick() {
       const route = getRoute(key);
       if (route) {
         const schedule = new Map(route.stops.map((s) => [s.id, s.schedOffsetS]));
-        await recordStopEvents(tripId, routeId, direction, view.events, schedule, trip.startedAt);
+        const skipped = view.stops.filter((s) => s.state === 'skipped').map((s) => s.id);
+        await recordStopEvents(tripId, routeId, direction, view.events, schedule, trip.startedAt, skipped);
       }
+      // The trail is a nice-to-have next to the position, so a failure here
+      // (say, the migration not yet applied) must not stop the rest.
+      await savePath(tripId, trip.tracker.committed).catch((e) =>
+        console.error('[live] trail:', (e as Error).message));
 
       await notifyForTrip(tripId, routeId, direction, view);
 
@@ -121,9 +176,39 @@ async function tick() {
       if (!engine.isReplaying(key)
           && trip.lastSeenAt && Date.now() - trip.lastSeenAt > STALE_MS) {
         engine.end(key);
+        await savePath(tripId, trip.tracker.committed).catch(() => {});
         await closeTrip(tripId, 'abandoned');
+        forgetPath(tripId);
         console.log(`[live] ${key} went quiet — closed`);
       }
+    }
+
+    // A run that just ended — arrived, or the driver pressed End — is no
+    // longer live, but its last moments are not written yet: the final
+    // stretch of trail, and the stops decided skipped at the finish. Once.
+    for (const { key, trip } of engine.unflushed()) {
+      trip.flushed = true;
+      const tripId = Number(trip.id);
+      const view = engine.view(key);
+      // The college arrival ENDS the trip, so this is the only tick that ever
+      // sees it: tell the students here, or they are never told.
+      if (view?.trip) {
+        const no = Number.isFinite(tripId) ? tripId
+          : process.env.PUSH_ON_REPLAY === '1' ? replayTripNo(trip.id) : null;
+        if (no != null) {
+          await notifyForTrip(no, key, 'outbound', view)
+            .catch((e) => console.error('[live] final push:', (e as Error).message));
+        }
+      }
+      if (!Number.isFinite(tripId)) continue;
+      const route = getRoute(key);
+      if (view && route) {
+        const schedule = new Map(route.stops.map((s) => [s.id, s.schedOffsetS]));
+        const skipped = view.stops.filter((s) => s.state === 'skipped').map((s) => s.id);
+        await recordStopEvents(tripId, key, 'outbound', view.events, schedule, trip.startedAt, skipped);
+      }
+      await savePath(tripId, trip.tracker.committed).catch(() => {});
+      forgetPath(tripId);
     }
 
     await sql("DELETE FROM waiting WHERE at < now() - interval '45 minutes'");

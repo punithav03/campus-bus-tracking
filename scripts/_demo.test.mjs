@@ -9,7 +9,8 @@
  *
  *   node scripts/_demo.test.mjs
  */
-const B = process.env.BASE ?? 'http://localhost:3100';
+import { B, ensureAccounts, PLAN, PW, ROUTES } from './_fixtures.mjs';
+await ensureAccounts();
 let pass = 0; let fail = 0;
 
 const ok = (name, cond, extra = '') => {
@@ -17,7 +18,7 @@ const ok = (name, cond, extra = '') => {
   else { fail++; console.log(`  FAIL ${name}  ${extra}`); }
 };
 
-const login = async (id, pw = id) => {
+const login = async (id, pw = PW) => {
   const r = await fetch(`${B}/api/auth/login`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ id, password: pw }),
@@ -36,13 +37,9 @@ const post = async (p, body, c) => {
 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const ROUTES = ['route-1', 'route-2', 'route-3'];
-const STUDENTS = {
-  'route-1': { roll: '23G01A05J0', stop: 'route-1-pichatur' },
-  'route-2': { roll: '23G01A05B1', stop: 'route-2-tiruchanoor' },
-  'route-3': { roll: '23G01A05D6', stop: 'route-3-leela-mahal' },
-};
-const DRIVERS = { 'route-1': '9550085083', 'route-2': '8686288604', 'route-3': '9573061292' };
+// Every bus the college runs, each with a test student boarding mid-route.
+const STUDENTS = Object.fromEntries(PLAN.map((p) => [p.route, { roll: p.student, stop: p.stop }]));
+const DRIVERS = Object.fromEntries(PLAN.map((p) => [p.route, p.driver]));
 
 const adm = await login('admin', process.env.ADMIN_PASSWORD ?? 'svpcet2026');
 

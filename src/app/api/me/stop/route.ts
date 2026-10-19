@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { one, sql } from '@/lib/db';
+import { routeColorFor } from '@/lib/brand';
 import { requireSession } from '@/lib/guard';
 
 export const dynamic = 'force-dynamic';
@@ -7,7 +8,7 @@ export const runtime = 'nodejs';
 
 interface StopRow {
   id: string; name: string; seq: number;
-  sched_offset_s: number; estimated: boolean;
+  sched_offset_s: number; estimated: boolean; extra: boolean;
 }
 
 /** '07:20' + 2700s → '08:05' */
@@ -42,8 +43,9 @@ export async function GET(req: Request) {
     'SELECT code, name, color, sched_start FROM routes WHERE id = $1', [routeId],
   );
   const stops = await sql<StopRow>(
-    `SELECT id, name, seq, sched_offset_s, estimated
-       FROM stops WHERE route_id = $1 ORDER BY seq`, [routeId],
+    // Nobody boards at the college, so it is not offered.
+    `SELECT id, name, seq, sched_offset_s, estimated, extra
+       FROM stops WHERE route_id = $1 AND name <> 'SVPCET' ORDER BY seq`, [routeId],
   );
 
   const start = route?.sched_start ?? '07:00';
@@ -54,12 +56,13 @@ export async function GET(req: Request) {
   return NextResponse.json(
     {
       current: me?.stop_id ?? null,
-      route: route && { id: routeId, code: route.code, name: route.name, color: route.color },
+      route: route && { id: routeId, code: route.code, name: route.name, color: routeColorFor(g.session.role, route.color) },
       stops: stops.map((s) => ({
         id: s.id,
         name: s.name,
         seq: s.seq,
         estimated: s.estimated,
+        extra: s.extra,
         pickup: clockPlus(start, s.sched_offset_s),
       })),
     },

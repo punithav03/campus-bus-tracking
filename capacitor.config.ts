@@ -66,6 +66,26 @@ const config: CapacitorConfig = {
     // The driver may be on a village road with no signal for minutes. Failing
     // the whole page on one bad request would end the trip.
     allowMixedContent: false,
+
+    /**
+     * WITHOUT THIS, TRACKING DIES AFTER FIVE MINUTES.
+     *
+     * Capacitor's modern bridge serves the app through a local HTTP server.
+     * Android treats a backgrounded page on that bridge as idle and stops
+     * delivering location to it after about five minutes — the foreground
+     * service is still alive, the notification is still showing, and the
+     * fixes simply stop. The driver sees nothing wrong. Students watch the
+     * bus glide to a halt.
+     *
+     * The plugin documents this and the legacy bridge is the fix:
+     * node_modules/@capacitor-community/background-geolocation/README.md:165
+     * and https://github.com/capacitor-community/background-geolocation/issues/89
+     *
+     * This is half the fix. The other half is in lib/api.ts — Android also
+     * throttles HTTP that the WebView itself initiates, so the fixes we do
+     * keep receiving have to be POSTed natively.
+     */
+    useLegacyBridge: true,
   },
 };
 

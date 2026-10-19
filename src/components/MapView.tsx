@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import maplibregl, { type Map as MlMap, type StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import { MAP_FILE, campusStyle, campusMapReachable, registerPmtiles } from '@/lib/basemap';
+
+registerPmtiles(maplibregl);
 
 /**
  * All of these render the SAME OpenStreetMap data — the difference is purely
@@ -15,6 +18,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
  * pale basemap, and a near-black casing looks like a smear on one.
  */
 export const MAP_STYLES = [
+  // Ours: served from this app, works offline once opened. See lib/basemap.ts.
+  { id: 'svpcet',      label: 'SVPCET map',        url: MAP_FILE, local: true, dark: false },
+  { id: 'svpcet-dark', label: 'SVPCET map — dark', url: MAP_FILE, local: true, dark: true },
   { id: 'liberty',   label: 'Liberty',          url: 'https://tiles.openfreemap.org/styles/liberty',                    dark: false },
   { id: 'colorful',  label: 'Colorful',         url: 'https://tiles.versatiles.org/assets/styles/colorful/style.json',  dark: false },
   { id: 'graybeard', label: 'Graybeard — grey', url: 'https://tiles.versatiles.org/assets/styles/graybeard/style.json', dark: false },
@@ -23,7 +29,7 @@ export const MAP_STYLES = [
   { id: 'ofm-dark',  label: 'OpenFreeMap dark', url: 'https://tiles.openfreemap.org/styles/dark',                       dark: true },
 ] as const;
 
-const DEFAULT_STYLE = 'liberty';
+const DEFAULT_STYLE = 'svpcet';
 const styleDef = (id: string) =>
   MAP_STYLES.find((s) => s.id === id) ??
   MAP_STYLES.find((s) => s.id === DEFAULT_STYLE)!;
@@ -47,25 +53,41 @@ export interface MapRoute {
 }
 
 export interface MapBus {
+  /** Where the bus REALLY is — the matched road position, not a point on the plan. */
   lat: number;
   lng: number;
   bearing: number;
   ghost: boolean;
-  /** How far along the route the server last saw it, in metres. */
+  /** Progress along the planned route, metres. Used to draw the line ahead. */
   distAlongM: number;
   /** Its speed at that moment, m/s — what we advance it by between readings. */
   speedMps: number;
   /** Only a LIVE bus may be predicted forward. See the animation loop. */
   live: boolean;
+  /** On its planned route. Off it, the line ahead is a routed road, not the plan. */
+  onRoute: boolean;
 }
+
+/** One stretch of the road driven. 'gps' = raw fixes, drawn dashed. */
+export interface MapTrailSeg { kind: 'road' | 'gps'; pts: [number, number][] }
+
+export type MapStopState = 'served' | 'skipped' | 'likely-skipped' | 'upcoming';
 
 interface Props {
   route: MapRoute | null;
   bus: MapBus | null;
   myStopId: string | null;
   campus: { lat: number; lng: number; name: string } | null;
-  /** 0-1 along the route — dims the part already driven. */
-  progress?: number;
+  /** The settled trail: the road the bus has actually driven this run. */
+  trail?: MapTrailSeg[];
+  /** The newest, still-revisable stretch, ending at the bus. */
+  tail?: [number, number][];
+  /** Off its route: the road from the bus to where it can rejoin. */
+  aheadVia?: [number, number][] | null;
+  /** Where along the plan the line ahead continues from. */
+  aheadFromM?: number | null;
+  /** What happened at each stop, by stop id. */
+  stopStates?: Record<string, MapStopState>;
 }
 
 /**
@@ -110,7 +132,8 @@ function whenStyleReady(m: MlMap, cb: () => void, skipSync = false) {
  * offline canvas deliberately. There is no third state where the map is blank
  * and nobody knows why.
  */
-async function loadStyle(url: string): Promise<string | StyleSpecification> {
+async function loadStyle(url: string, dark = false): Promise<string | StyleSpecification> {
+  if (url === MAP_FILE) return (await campusMapReachable()) ? campusStyle(dark) : OFFLINE_STYLE;
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
     if (!res.ok) throw new Error(String(res.status));
@@ -145,17 +168,89 @@ function pointAt(shape: [number, number][], cum: number[], dist: number) {
   return { lat, lng, bearing };
 }
 
-export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
+/** Cumulative metres along a polyline. */
+function cumOf(pts: [number, number][]): number[] {
+  const out = [0];
+  for (let i = 1; i < pts.length; i++) out.push(out[i - 1] + metresBetween(pts[i - 1], pts[i]));
+  return out;
+}
+
+function metresBetween(a: [number, number], b: [number, number]): number {
+  const kx = 111320 * Math.cos((a[1] * Math.PI) / 180);
+  return Math.hypot((b[0] - a[0]) * kx, (b[1] - a[1]) * 110574);
+}
+
+/** Nearest point on a polyline: distance along it, and how far off it the point is. */
+function projectOnPath(
+  pts: [number, number][], cum: number[], p: [number, number], fromM = 0, toM = Infinity,
+): { d: number; off: number } | null {
+  if (pts.length === 0) return null;
+  if (pts.length === 1) return { d: 0, off: metresBetween(pts[0], p) };
+  const kx = 111320 * Math.cos((p[1] * Math.PI) / 180), ky = 110574;
+  let best: { d: number; off: number } | null = null;
+  for (let i = 1; i < pts.length; i++) {
+    if (cum[i] < fromM || cum[i - 1] > toM) continue;
+    const ax = (pts[i - 1][0] - p[0]) * kx, ay = (pts[i - 1][1] - p[1]) * ky;
+    const bx = (pts[i][0] - p[0]) * kx, by = (pts[i][1] - p[1]) * ky;
+    const dx = bx - ax, dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2));
+    const off = Math.hypot(ax + t * dx, ay + t * dy);
+    if (!best || off < best.off) best = { d: cum[i - 1] + t * (cum[i] - cum[i - 1]), off };
+  }
+  return best;
+}
+
+/** The plan from `fromM` to `toM`, as points — the line ahead of a bus on its route. */
+function planSlice(shape: [number, number][], cum: number[], fromM: number, toM = Infinity): [number, number][] {
+  if (shape.length < 2 || cum.length !== shape.length) return [];
+  const start = pointAt(shape, cum, fromM);
+  if (!start) return [];
+  const out: [number, number][] = [[start.lng, start.lat]];
+  for (let i = 0; i < shape.length; i++) {
+    if (cum[i] > fromM && cum[i] < toM) out.push(shape[i]);
+  }
+  if (Number.isFinite(toM)) {
+    const end = pointAt(shape, cum, toM);
+    if (end) out.push([end.lng, end.lat]);
+  }
+  return out;
+}
+
+/** Append points, dropping any that repeat the last one. */
+function pushPts(into: [number, number][], pts: [number, number][]) {
+  for (const p of pts) {
+    const last = into[into.length - 1];
+    if (!last || metresBetween(last, p) > 0.5) into.push(p);
+  }
+}
+
+const EMPTY_FC = { type: 'FeatureCollection' as const, features: [] };
+
+export function MapView({
+  route, bus, myStopId, campus, trail, tail, aheadVia, aheadFromM, stopStates,
+}: Props) {
   const holder = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const busMarker = useRef<maplibregl.Marker | null>(null);
   const stopMarkers = useRef<maplibregl.Marker[]>([]);
   const campusMarker = useRef<maplibregl.Marker | null>(null);
 
-  /** Metres along the route we are DRAWING the bus at. */
+  /**
+   * The road the marker is travelling along: the last stretch the bus
+   * actually drove, then the road ahead of it. Rebuilt on every reading.
+   * `base` is how far along it the reading itself sits.
+   */
+  const motion = useRef<{
+    path: [number, number][]; cum: number[]; base: number;
+    speed: number; at: number; live: boolean;
+  } | null>(null);
+  /** Metres along `motion.path` we are DRAWING the bus at. */
   const shownDist = useRef<number | null>(null);
-  /** The last reading from the server, and when it landed. */
-  const fix = useRef<{ dist: number; speed: number; at: number; live: boolean } | null>(null);
+  /** Where the marker is drawn right now, so the next path can start from it. */
+  const drawnPos = useRef<[number, number] | null>(null);
+  /** Identity of the last reading, so a re-render is not mistaken for news. */
+  const lastReading = useRef<string | null>(null);
   /** Cumulative metres at each shape vertex — the measuring tape, client side. */
   const cum = useRef<number[]>([]);
   /**
@@ -186,6 +281,17 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   const [ready, setReady] = useState(false);
   const [offline, setOffline] = useState(false);
   const [follow, setFollow] = useState(false);
+  /**
+   * Navigation view: tilted, turning with the bus, the way a satnav shows the
+   * road ahead. Remembered per device; off by default because a flat
+   * north-up map is easier to read at a glance from a bus stop.
+   */
+  const [nav3d, setNav3d] = useState(false);
+  const nav3dRef = useRef(false);
+  nav3dRef.current = nav3d;
+  useEffect(() => {
+    try { if (localStorage.getItem('campusbus.nav3d') === '1') setNav3d(true); } catch { /* private mode */ }
+  }, []);
   /** Set once the student pans or zooms — after that the camera is theirs. */
   const grabbed = useRef(false);
   /** So we only snap to the bus the first time one appears. */
@@ -237,26 +343,99 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   const myStopRef = useRef(myStopId);
   const campusRef = useRef(campus);
   const styleRef = useRef(styleId);
-  const progressRef = useRef(progress);
+  const trailRef = useRef(trail);
+  const tailRef = useRef(tail);
+  const viaRef = useRef(aheadVia);
+  const aheadFromRef = useRef(aheadFromM);
+  const statesRef = useRef(stopStates);
   routeRef.current = route;
   myStopRef.current = myStopId;
   campusRef.current = campus;
   styleRef.current = styleId;
-  progressRef.current = progress;
+  trailRef.current = trail;
+  tailRef.current = tail;
+  viaRef.current = aheadVia;
+  aheadFromRef.current = aheadFromM;
+  statesRef.current = stopStates;
 
-  /** Travelled/remaining gradient, in colours that survive the current basemap. */
-  const paintGradient = useCallback((m: MlMap) => {
-    const r = routeRef.current;
-    if (!r || !m.getLayer('route-line')) return;
+  /**
+   * How the PLANNED route looks. With no bus running it is the route, drawn
+   * boldly — it is what a student wants to see. Once a bus is running it
+   * steps back to a faint reference line, because two other lines now carry
+   * the truth: the road actually driven, and the road ahead.
+   *
+   * That split is the whole point. The old map coloured the plan in behind
+   * the bus as "travelled", so a bus that skipped the Nindra spur was shown
+   * as having driven it. Now the spur simply stays faint, because nobody
+   * drove it.
+   */
+  const planLook = useCallback(() => {
     const dark = styleDef(styleRef.current).dark;
-    const done = dark ? '#46536a' : '#94a3b8';
-    const p = Math.min(0.999, Math.max(0.001, progressRef.current));
+    return busRef.current
+      ? { op: 0.38, w: 3, cas: 0 }
+      : { op: 1, w: 5, cas: dark ? 0.6 : 0.9 };
+  }, []);
+
+  const paintPlan = useCallback((m: MlMap) => {
+    if (!m.getLayer('route-line') || !m.getLayer('route-casing')) return;
+    const look = planLook();
     try {
-      m.setPaintProperty('route-line', 'line-gradient', [
-        'interpolate', ['linear'], ['line-progress'],
-        0, done, p - 0.0008, done, p, r.color, 1, r.color,
-      ]);
+      m.setPaintProperty('route-line', 'line-opacity', look.op);
+      m.setPaintProperty('route-line', 'line-width', look.w);
+      m.setPaintProperty('route-casing', 'line-opacity', look.cas);
     } catch { /* layer replaced mid-flight */ }
+  }, [planLook]);
+
+  /**
+   * The two lines that tell the truth: the road behind the bus that it
+   * actually drove, and the road ahead of it.
+   *
+   * Ahead is the plan from where the bus is — or, while it is off its route,
+   * the road from the bus to where it can rejoin (dashed: a routed estimate,
+   * not a promise), then the plan on from there.
+   */
+  const paintLive = useCallback((m: MlMap) => {
+    const r = routeRef.current;
+    const b = busRef.current;
+    const tSrc = m.getSource('trail') as maplibregl.GeoJSONSource | undefined;
+    const aSrc = m.getSource('ahead') as maplibregl.GeoJSONSource | undefined;
+    const vSrc = m.getSource('via') as maplibregl.GeoJSONSource | undefined;
+    if (!tSrc || !aSrc || !vSrc) return;
+
+    if (!b || !r) {
+      tSrc.setData(EMPTY_FC);
+      aSrc.setData(EMPTY_FC);
+      vSrc.setData(EMPTY_FC);
+      return;
+    }
+
+    // ---- behind: the settled trail, then the newest stretch ending at the bus
+    const features: GeoJSON.Feature<GeoJSON.LineString>[] = (trailRef.current ?? [])
+      .filter((sg) => sg.pts.length >= 2)
+      .map((sg) => ({
+        type: 'Feature',
+        properties: { kind: sg.kind },
+        geometry: { type: 'LineString', coordinates: sg.pts },
+      }));
+    const tl = tailRef.current ?? [];
+    if (tl.length >= 2) {
+      features.push({
+        type: 'Feature', properties: { kind: 'road' },
+        geometry: { type: 'LineString', coordinates: tl },
+      });
+    }
+    tSrc.setData({ type: 'FeatureCollection', features });
+
+    // ---- ahead
+    const via = viaRef.current;
+    const from = aheadFromRef.current ?? b.distAlongM;
+    const onward = planSlice(r.shape, cum.current, from);
+    aSrc.setData(onward.length >= 2
+      ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: onward } }
+      : EMPTY_FC);
+    vSrc.setData(!b.onRoute && via && via.length >= 2
+      ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: via } }
+      : EMPTY_FC);
   }, []);
 
   // ---- draw our own geometry ----------------------------------------------
@@ -266,15 +445,17 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
 
     for (const s of stopMarkers.current) s.remove();
     stopMarkers.current = [];
-    for (const id of ['route-line', 'route-casing']) if (m.getLayer(id)) m.removeLayer(id);
-    if (m.getSource('route')) m.removeSource('route');
+    for (const id of ['via-line', 'ahead-line', 'ahead-casing', 'trail-gps', 'trail-line',
+                      'trail-casing', 'route-line', 'route-casing']) {
+      if (m.getLayer(id)) m.removeLayer(id);
+    }
+    for (const id of ['via', 'ahead', 'trail', 'route']) if (m.getSource(id)) m.removeSource(id);
     if (!r) return;
 
     const dark = styleDef(styleRef.current).dark;
 
     m.addSource('route', {
       type: 'geojson',
-      lineMetrics: true, // required for the travelled/remaining gradient
       data: {
         type: 'Feature',
         properties: {},
@@ -302,7 +483,53 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       layout: { 'line-join': 'round', 'line-cap': 'round' },
       paint: { 'line-color': r.color, 'line-width': 5, 'line-opacity': 1 },
     });
-    paintGradient(m);
+
+    // The road actually driven. Grey, so it reads as "done" against the
+    // route colour ahead — the same convention the map always used, now
+    // drawn from where the bus really went instead of from the plan.
+    const done = dark ? '#7b8aa3' : '#64748b';
+    m.addSource('trail', { type: 'geojson', data: EMPTY_FC });
+    m.addLayer({
+      id: 'trail-casing', type: 'line', source: 'trail',
+      filter: ['==', ['get', 'kind'], 'road'],
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': dark ? '#05070b' : '#ffffff', 'line-width': 9, 'line-opacity': dark ? 0.55 : 0.85 },
+    });
+    m.addLayer({
+      id: 'trail-line', type: 'line', source: 'trail',
+      filter: ['==', ['get', 'kind'], 'road'],
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': done, 'line-width': 4.5 },
+    });
+    // Raw GPS joined up, where no known road explains the fixes. Dashed,
+    // because it is a record of fixes, not a claim about which road.
+    m.addLayer({
+      id: 'trail-gps', type: 'line', source: 'trail',
+      filter: ['==', ['get', 'kind'], 'gps'],
+      layout: { 'line-join': 'round', 'line-cap': 'butt' },
+      paint: { 'line-color': done, 'line-width': 3, 'line-dasharray': [1.4, 1.6] },
+    });
+
+    // The road ahead, in the route's colour.
+    m.addSource('ahead', { type: 'geojson', data: EMPTY_FC });
+    m.addLayer({
+      id: 'ahead-casing', type: 'line', source: 'ahead',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': dark ? '#05070b' : '#ffffff', 'line-width': 10, 'line-opacity': dark ? 0.6 : 0.9 },
+    });
+    m.addLayer({
+      id: 'ahead-line', type: 'line', source: 'ahead',
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': r.color, 'line-width': 5 },
+    });
+    // Off the route: how it gets back. A routed estimate, so dashed.
+    m.addSource('via', { type: 'geojson', data: EMPTY_FC });
+    m.addLayer({
+      id: 'via-line', type: 'line', source: 'via',
+      layout: { 'line-join': 'round', 'line-cap': 'butt' },
+      paint: { 'line-color': r.color, 'line-width': 4.5, 'line-dasharray': [1.2, 1.2] },
+    });
+    paintLive(m);
 
     // Draw the line on rather than flashing it in.
     //
@@ -315,9 +542,12 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     const DRAW_MS = 620;
     const at = (e: number) => {
       if (!m.getLayer('route-line') || !m.getLayer('route-casing')) return;
-      m.setPaintProperty('route-line', 'line-opacity', e);
-      m.setPaintProperty('route-casing', 'line-opacity', e * (dark ? 0.6 : 0.9));
-      m.setPaintProperty('route-line', 'line-width', 2 + e * 3);
+      // Grow towards whatever the plan should look like right now — bold with
+      // no bus, a faint reference line with one.
+      const look = planLook();
+      m.setPaintProperty('route-line', 'line-opacity', e * look.op);
+      m.setPaintProperty('route-casing', 'line-opacity', e * look.cas);
+      m.setPaintProperty('route-line', 'line-width', look.w * (0.4 + 0.6 * e));
       m.setPaintProperty('route-casing', 'line-width', 4 + e * 6);
     };
     const t0 = performance.now();
@@ -338,6 +568,7 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       el.style.setProperty('--c', r.color);
       el.dataset.mine = String(s.id === myStopRef.current);
       el.dataset.estimated = String(!!s.estimated);
+      el.dataset.state = statesRef.current?.[s.id] ?? 'upcoming';
       el.dataset.dark = String(dark);
       el.title = s.estimated ? `${s.name} (position estimated)` : s.name;
       stopMarkers.current.push(
@@ -356,7 +587,7 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
         .setLngLat([c.lng, c.lat])
         .addTo(m);
     }
-  }, [paintGradient]);
+  }, [planLook, paintLive]);
 
   /**
    * Every entry point goes through here, so the guards live in exactly one place.
@@ -415,7 +646,7 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       // time-to-first-map is the number a student actually feels. Reachability
       // is proven by the style arriving, not by asking twice — the watchdog
       // below covers the case where it never does.
-      const style: string | StyleSpecification = initial.url;
+      const style: string | StyleSpecification = 'local' in initial ? campusStyle(initial.dark) : initial.url;
       if (cancelled || !holder.current) return;
 
       const m = new maplibregl.Map({
@@ -476,9 +707,9 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     styleRef.current = id; // drawRoute reads this synchronously, before React re-renders
     try { localStorage.setItem('campusbus.mapstyle', id); } catch { /* private mode */ }
 
-    const resolved = await loadStyle(def.url);
+    const resolved = await loadStyle(def.url, def.dark);
     if (req !== styleReq.current || !map.current) return; // superseded mid-fetch
-    setOffline(resolved !== def.url);
+    setOffline(resolved === OFFLINE_STYLE);
 
     // A second switch while the first is still loading would otherwise leave
     // two watchers running, and the older one draws with the older style's
@@ -527,10 +758,29 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
   // Tear down a pending style watcher when the map goes away.
   useEffect(() => () => { styleWatch.current?.(); }, []);
 
+  // The plan steps back when a bus appears and comes forward when it goes.
+  const hasBus = !!bus;
   useEffect(() => {
     const m = map.current;
-    if (m && ready) paintGradient(m);
-  }, [ready, progress, styleId, paintGradient]);
+    if (m) paintPlan(m);
+  }, [ready, hasBus, styleId, paintPlan]);
+
+  // Trail and line ahead follow every reading.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    try { paintLive(m); } catch { /* style mid-swap — drawNow repaints */ }
+  }, [ready, bus, trail, tail, aheadVia, aheadFromM, route, paintLive]);
+
+  // Stop markers carry what happened there — a skipped stop looks skipped.
+  useEffect(() => {
+    const r = routeRef.current;
+    if (!r) return;
+    stopMarkers.current.forEach((mk, i) => {
+      const st = r.stops[i];
+      if (st) mk.getElement().dataset.state = stopStates?.[st.id] ?? 'upcoming';
+    });
+  }, [stopStates]);
 
   /**
    * Frame the BUS when there is one, not the whole line.
@@ -565,9 +815,15 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
     const m = map.current;
     if (!m || !ready) return;
     const mine = () => { grabbed.current = true; setFollow(false); };
+    const gesture = (e: { originalEvent?: unknown }) => { if (e.originalEvent) mine(); };
     m.on('dragstart', mine);
-    m.on('zoomstart', (e: { originalEvent?: unknown }) => { if (e.originalEvent) mine(); });
-    return () => { m.off('dragstart', mine); };
+    m.on('zoomstart', gesture);
+    m.on('rotatestart', gesture);
+    m.on('pitchstart', gesture);
+    return () => {
+      m.off('dragstart', mine); m.off('zoomstart', gesture);
+      m.off('rotatestart', gesture); m.off('pitchstart', gesture);
+    };
   }, [ready]);
 
   // ---- fit to the route ----------------------------------------------------
@@ -657,15 +913,60 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       busMarker.current?.remove();
       busMarker.current = null;
       shownDist.current = null;
-      fix.current = null;
+      motion.current = null;
+      drawnPos.current = null;
+      lastReading.current = null;
       return;
     }
 
-    // Only record a genuinely new reading, or the "time since" clock resets on
-    // every render and the bus never gets to move between polls.
-    if (!fix.current || fix.current.dist !== bus.distAlongM || fix.current.live !== bus.live) {
-      fix.current = { dist: bus.distAlongM, speed: bus.speedMps, at: Date.now(), live: bus.live };
-      if (shownDist.current == null) shownDist.current = bus.distAlongM;
+    // Only a genuinely new reading rebuilds the path, or the "time since"
+    // clock resets on every render and the bus never moves between polls.
+    const key = `${bus.lat.toFixed(6)},${bus.lng.toFixed(6)},${bus.live},${bus.onRoute}`;
+    if (key !== lastReading.current) {
+      lastReading.current = key;
+      const P: [number, number] = [bus.lng, bus.lat];
+
+      // The road the marker will travel: the stretch the bus has just driven
+      // (so a marker that is behind catches up ALONG THE ROAD, round the
+      // bend, instead of cutting the corner), the reading itself, and then
+      // the road ahead (so between readings it rolls on along real tarmac).
+      const pts: [number, number][] = [];
+      pushPts(pts, tailRef.current ?? []);
+      pushPts(pts, [P]);
+      const baseIdx = pts.length - 1;
+
+      const r = routeRef.current;
+      if (bus.onRoute && r && cum.current.length === r.shape.length) {
+        // Join the plan where the bus actually is, not at the smoothed
+        // progress figure, which trails it by a few metres — joining there
+        // would send the marker backwards for a moment on every reading.
+        const near = projectOnPath(r.shape, cum.current, P,
+          bus.distAlongM - 150, bus.distAlongM + 400);
+        const from = near && near.off < 60 ? near.d : bus.distAlongM;
+        pushPts(pts, planSlice(r.shape, cum.current, from, from + 2500));
+      } else if (!bus.onRoute && viaRef.current?.length) {
+        pushPts(pts, viaRef.current);
+      }
+
+      let pc = cumOf(pts);
+      let base = pc[baseIdx] ?? 0;
+      let start = base;
+      const old = drawnPos.current;
+      if (old) {
+        const pr = projectOnPath(pts, pc, old);
+        if (pr && pr.off <= 40) {
+          start = pr.d;                              // already on this road
+        } else if (metresBetween(old, P) < 250) {
+          pts.unshift(old);                          // a short glide across
+          pc = cumOf(pts);
+          base = pc[baseIdx + 1];
+          start = 0;
+        }
+        // Otherwise: a big jump — it was hidden, or came back from a dead
+        // zone. Be right immediately rather than slide across fields.
+      }
+      motion.current = { path: pts, cum: pc, base, speed: bus.speedMps, at: Date.now(), live: bus.live };
+      shownDist.current = start;
       // A genuinely fresh reading — we are allowed to move again.
       awaitingFresh.current = false;
     }
@@ -702,8 +1003,9 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       busMarker.current = new maplibregl.Marker({ element: el })
         .setLngLat([bus.lng, bus.lat])
         .addTo(m);
-      // The animation loop takes over from here and works in metres along the
-      // route, not raw points, so there is no separate position to seed.
+      drawnPos.current = [bus.lng, bus.lat];
+      // The animation loop takes over from here and works in metres along
+      // the motion path, so there is no separate position to seed.
     }
     const el = busMarker.current.getElement();
     el.style.setProperty('--c', route?.color ?? '#f97316');
@@ -718,11 +1020,12 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
    * then sat perfectly still until the next one — move, freeze, move, freeze.
    * That is what made it look dead.
    *
-   * So between readings we carry the bus forward ourselves, along the route, at
-   * the speed it was last doing. We can do this honestly because we know the
-   * road: the bus is not drifting across a field toward a guessed point, it is
-   * following the same tarmac it is actually on. Each new reading then corrects
-   * the guess rather than replacing it, so the motion never jumps.
+   * So between readings we carry the bus forward ourselves, at the speed it
+   * was last doing, along the road it is ACTUALLY on: the matched road behind
+   * it and the road ahead of it — the plan if it is on its route, the routed
+   * road back if it is not. It used to be carried along the plan regardless,
+   * which drew a bus that had skipped a spur gliding down the spur. Each new
+   * reading corrects the guess rather than replacing it, so motion never jumps.
    *
    * Two limits, and both are about not lying:
    *   · prediction stops the moment the signal is no longer live. A bus we have
@@ -743,17 +1046,22 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       raf = requestAnimationFrame(step);
       const mk = busMarker.current;
       const m = map.current;
-      const r = routeRef.current;
-      const f = fix.current;
+      const f = motion.current;
       const now = performance.now();
       const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
-      if (!mk || !f || !r || cum.current.length < 2) return;
+      if (!mk || !f || f.path.length === 0) return;
+      if (f.path.length === 1) {
+        mk.setLngLat(f.path[0]);
+        drawnPos.current = f.path[0];
+        return;
+      }
+      const total = f.cum[f.cum.length - 1];
 
       // Where the bus most likely is RIGHT NOW.
       const sinceS = Math.min(PREDICT_CAP_S, (Date.now() - f.at) / 1000);
       const predict = f.live && !awaitingFresh.current;
-      const wanted = predict ? f.dist + f.speed * sinceS : f.dist;
+      const wanted = Math.min(total, predict ? f.base + f.speed * sinceS : f.base);
 
       if (shownDist.current == null) shownDist.current = wanted;
       const gap = wanted - shownDist.current;
@@ -772,13 +1080,15 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       } else if (predict) {
         shownDist.current += f.speed * dt;   // keep rolling while we are ahead
       }
+      shownDist.current = Math.max(0, Math.min(total, shownDist.current));
 
-      const p = pointAt(r.shape, cum.current, shownDist.current);
+      const p = pointAt(f.path, f.cum, shownDist.current);
       if (!p) return;
       mk.setLngLat([p.lng, p.lat]);
+      drawnPos.current = [p.lng, p.lat];
 
-      // Heading comes from the ROAD, which is steadier than differencing two
-      // noisy fixes, and it is what the bus is physically doing anyway.
+      // Heading comes from the ROAD under the marker, which is steadier than
+      // differencing two noisy fixes, and is what the bus is doing anyway.
       if (heading.current == null) heading.current = p.bearing;
       const delta = ((p.bearing - heading.current + 540) % 360) - 180;
       heading.current = (heading.current + delta * 0.12 + 360) % 360;
@@ -786,12 +1096,15 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       // Face the way we are going. The dead bands around due north and due
       // south are deliberate: without them a bus heading almost exactly north
       // flips back and forth every time the bearing jitters across 360.
-      const h = heading.current;
-      if (h > 12 && h < 168) facing.current = 1;
-      else if (h > 192 && h < 348) facing.current = -1;
+
+      // The pointer and the side-on bus are drawn on the SCREEN, so they need
+      // the heading relative to however the map itself is turned.
+      const screenH = (heading.current - (m?.getBearing() ?? 0) + 720) % 360;
+      if (screenH > 12 && screenH < 168) facing.current = 1;
+      else if (screenH > 192 && screenH < 348) facing.current = -1;
 
       const el = mk.getElement();
-      el.style.setProperty('--bearing', heading.current.toFixed(1) + 'deg');
+      el.style.setProperty('--bearing', screenH.toFixed(1) + 'deg');
       el.style.setProperty('--flip', String(facing.current));
       // Lets the CSS calm the marker down when we are no longer sure.
       el.dataset.predicted = !f.live || sinceS > 6 ? 'true' : 'false';
@@ -807,7 +1120,10 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
       // the bug this was meant to fix.
       if (follow && m && !grabbed.current && !m.isEasing()) {
         ticks++;
-        m.setCenter([p.lng, p.lat]);
+        // In the navigation view the map turns with the bus, from the same
+        // smoothed heading as the pointer, so the road ahead stays "up".
+        if (nav3dRef.current) m.jumpTo({ center: [p.lng, p.lat], bearing: heading.current });
+        else m.setCenter([p.lng, p.lat]);
       }
     };
     raf = requestAnimationFrame(step);
@@ -843,11 +1159,52 @@ export function MapView({ route, bus, myStopId, campus, progress = 0 }: Props) {
         <button
           className="map-follow"
           data-on={follow}
-          onClick={() => setFollow((f) => !f)}
+          onClick={() => {
+            const m = map.current;
+            const on = !follow;
+            if (on && m && drawnPos.current) {
+              // Taking the camera back: whatever the student did to the map
+              // before, following now means following.
+              grabbed.current = false;
+              m.easeTo({
+                center: drawnPos.current,
+                zoom: Math.max(m.getZoom(), nav3d ? 16 : 14.5),
+                pitch: nav3d ? 55 : 0,
+                bearing: nav3d ? heading.current ?? 0 : 0,
+                padding: visiblePadding(),
+                duration: 900,
+              });
+            }
+            setFollow(on);
+          }}
           disabled={!bus}
           title={bus ? 'Keep the camera on the bus' : 'No bus running'}
         >
           {follow ? '◉ Following' : '◎ Follow bus'}
+        </button>
+        <button
+          className="map-follow"
+          data-on={nav3d}
+          onClick={() => {
+            const m = map.current;
+            const on = !nav3d;
+            setNav3d(on);
+            try { localStorage.setItem('campusbus.nav3d', on ? '1' : '0'); } catch { /* private mode */ }
+            if (!m) return;
+            if (on && drawnPos.current) {
+              grabbed.current = false;
+              setFollow(true);
+              m.easeTo({
+                center: drawnPos.current, zoom: Math.max(m.getZoom(), 16), pitch: 55,
+                bearing: heading.current ?? 0, padding: visiblePadding(), duration: 1100,
+              });
+            } else {
+              m.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+            }
+          }}
+          title="Tilted view that turns with the bus"
+        >
+          3D
         </button>
       </div>
 

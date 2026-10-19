@@ -28,3 +28,7 @@ android/captures/
 android/local.properties
 android/app/src/main/assets/public/
 android/app/src/main/assets/capacitor.config.json
+
+# Student names and phone numbers. Never in a public repo.
+data/private/
+data/push-dry-run.jsonl

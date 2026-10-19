@@ -147,3 +147,81 @@ export function projectOnto(
 
 export const clamp = (v: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, v));
+
+export interface PlanHit {
+  /** Where on the planned route, metres from the start. */
+  distAlong: number;
+  /** How far the point is from the planned line there. */
+  offsetM: number;
+  /** Which way the planned route runs at that spot, degrees. */
+  bearing: number;
+}
+
+/**
+ * Every place in [fromD, toD] where the planned route passes within
+ * `maxOffset` of a point — one hit per pass, in route order.
+ *
+ * "Per pass" is the part that matters. An out-and-back spur runs down a road
+ * and back up the SAME road, so a bus standing on it is close to the plan
+ * twice: once on the way in, once on the way out. projectOnto() answers with
+ * whichever is nearer and cannot tell them apart. This answers with both, and
+ * with the direction the plan was travelling on each — which is what does
+ * tell them apart, because the two passes run in opposite directions.
+ *
+ * A pass is a run of consecutive segments within range. Given the bus's
+ * `heading`, a segment running the other way does not count as in range at
+ * all — so near a turnaround, where both legs are close, the leg the bus is
+ * NOT on simply is not a candidate, however near it is. Without a heading
+ * (a parked bus) every pass counts, and a run is cut where the line turns
+ * back on itself so the legs still come back as separate hits.
+ */
+export function planHits(
+  shape: LngLat[], cum: number[], p: Point,
+  fromD: number, toD: number, maxOffset: number,
+  heading: number | null = null, headingTol = 70,
+): PlanHit[] {
+  const from = Math.max(1, lowerBound(cum, Math.max(0, fromD)));
+  const to = Math.min(shape.length - 1, lowerBound(cum, toD) + 1);
+  const kLat = 111320;
+  const kLng = 111320 * Math.cos(rad(p.lat));
+
+  const hits: PlanHit[] = [];
+  let run: PlanHit | null = null;
+  let runBearing = 0;
+
+  for (let i = from; i <= to; i++) {
+    const [ax, ay] = shape[i - 1];
+    const [bx, by] = shape[i];
+    const axm = (ax - p.lng) * kLng, aym = (ay - p.lat) * kLat;
+    const bxm = (bx - p.lng) * kLng, bym = (by - p.lat) * kLat;
+    const dx = bxm - axm, dy = bym - aym;
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) continue;
+    let t = -(axm * dx + aym * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const off = Math.hypot(axm + t * dx, aym + t * dy);
+    const bearing = (deg(Math.atan2(dx, dy)) + 360) % 360;
+
+    if (off > maxOffset || (heading != null && angleDiff(bearing, heading) > headingTol)) {
+      if (run) { hits.push(run); run = null; }
+      continue;
+    }
+    if (run && angleDiff(bearing, runBearing) > 100) {
+      hits.push(run); run = null;
+    }
+    const d = cum[i - 1] + t * (cum[i] - cum[i - 1]);
+    if (d < fromD || d > toD) continue;
+    if (!run || off < run.offsetM) {
+      run = { distAlong: d, offsetM: off, bearing };
+    }
+    runBearing = bearing;
+  }
+  if (run) hits.push(run);
+  return hits;
+}
+
+/** Smallest angle between two compass bearings, 0-180. */
+export function angleDiff(a: number, b: number): number {
+  const d = Math.abs(((a - b) % 360 + 360) % 360);
+  return d > 180 ? 360 - d : d;
+}

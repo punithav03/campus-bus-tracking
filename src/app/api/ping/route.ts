@@ -40,6 +40,9 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ...result,
     distAlongM: view?.trip?.distAlongM ?? null,
+    // What the driver's screen calls "Travelled": road actually driven, which
+    // stops being the same number as progress the moment a stop is skipped.
+    drivenM: view?.trip?.drivenM ?? null,
     nextStop: view?.stops.find((s) => s.seq === view.trip?.nextStopSeq)?.name ?? null,
   });
 }

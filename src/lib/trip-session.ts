@@ -2,7 +2,7 @@
 
 import { startTracking, isNativeApp, type Tracker } from './tracker';
 import type { Ping } from './types';
-import { apiFetch } from './api';
+import { postJSON } from './api';
 
 /**
  * The trip, living OUTSIDE React.
@@ -36,6 +36,18 @@ export interface TripState {
   distKm: number | null;
   /** True when GPS keeps running with the screen off. */
   background: boolean;
+  /**
+   * When the server last actually accepted a batch — not when we last tried.
+   *
+   * This is the only number that proves the bus is on air. Fixes can pile up
+   * for minutes while every other counter looks healthy, which is exactly how
+   * the five-minute WebView throttle hid itself.
+   */
+  lastSentAt: number | null;
+  /** When Start was pressed — the baseline before the first batch lands. */
+  startedAt: number | null;
+  /** Which stack the last successful POST used. Diagnoses the throttle. */
+  via: 'native' | 'web' | null;
   message: string | null;
   /** Set when the bus reached the college and the trip closed itself. */
   arrived: boolean;
@@ -46,7 +58,8 @@ export interface TripState {
 const idle: TripState = {
   running: false, routeId: '', captured: 0, accepted: 0, buffered: 0,
   lastAcc: null, nextStop: null, distKm: null,
-  background: false, message: null, arrived: false, resumed: false,
+  background: false, lastSentAt: null, startedAt: null, via: null,
+  message: null, arrived: false, resumed: false,
 };
 
 let state: TripState = { ...idle };
@@ -114,16 +127,19 @@ async function flush() {
   queue = [];
   set({ buffered: 0 });
   try {
-    const r = await apiFetch('/api/ping', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ routeId: state.routeId, pings: batch, source: 'driver' }),
-    });
-    const j = await r.json();
+    // Native HTTP when we are in the app. Android throttles anything the
+    // WebView sends once it has been backgrounded five minutes, and this POST
+    // is the one request that must never be throttled. See api.ts.
+    const r = await postJSON('/api/ping',
+      { routeId: state.routeId, pings: batch, source: 'driver' });
+    if (!r.ok) throw new Error(`ping ${r.status}`);
+    const j = r.body as { accepted?: number; nextStop?: string; distAlongM?: number; drivenM?: number | null };
     set({
       accepted: state.accepted + (j.accepted ?? 0),
       nextStop: j.nextStop ?? null,
-      distKm: j.distAlongM != null ? j.distAlongM / 1000 : null,
+      distKm: j.drivenM != null ? j.drivenM / 1000 : j.distAlongM != null ? j.distAlongM / 1000 : null,
+      lastSentAt: Date.now(),
+      via: r.via,
     });
   } catch {
     // A dead zone is not a failure. Put them back at the FRONT so order holds,
@@ -160,17 +176,13 @@ export async function startTrip(
   if (state.running) return;
   queue = [];
   ticks = 0;
-  set({ ...idle, running: true, routeId, resumed: !!opts.resumed });
+  set({ ...idle, running: true, routeId, startedAt: Date.now(), resumed: !!opts.resumed });
   remember(routeId);
 
   // A resumed trip is already open on the server; starting it again would
   // throw away everything it has learned about this run so far.
   if (!opts.resumed) {
-    await apiFetch('/api/trip', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ routeId, action: 'start' }),
-    });
+    await postJSON('/api/trip', { routeId, action: 'start' });
   }
 
   // Only in a browser. In the app the foreground service does not need the
@@ -219,14 +231,12 @@ export async function endTrip(opts: { arrived?: boolean } = {}): Promise<unknown
   await flush();                       // never lose the last few seconds
 
   try {
-    const r = await apiFetch('/api/trip', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ routeId, action: 'end' }),
-    });
+    // Native too: he may be ending the run with the app in his pocket, which
+    // is precisely when a WebView POST would be throttled into silence.
+    const r = await postJSON('/api/trip', { routeId, action: 'end' });
     // The server knows what the run actually looked like — stops served,
     // how long, how early. Worth showing him; he just drove it.
-    summary = (await r.json())?.summary ?? null;
+    summary = r.body?.summary ?? null;
   } catch { /* the engine closes it on its own once the pings stop */ }
 
   try { await wakeLock?.release(); } catch { /* already gone */ }

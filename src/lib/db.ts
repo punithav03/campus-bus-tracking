@@ -39,7 +39,8 @@ function create(): Pool {
     // Neon requires TLS. It presents a valid cert, but the pooler sits behind a
     // proxy whose chain Node does not always carry, so verification is relaxed
     // while transport stays encrypted.
-    ssl: { rejectUnauthorized: false },
+    // A database on this machine (local testing) speaks plain TCP.
+    ssl: /@(localhost|127\.0\.0\.1)[:/]/.test(URL) ? false : { rejectUnauthorized: false },
     max: 8,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,

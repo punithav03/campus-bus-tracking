@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { engine } from '@/lib/engine';
 import { getNetwork } from '@/lib/network';
+import { routeColorFor } from '@/lib/brand';
 import { requireSession } from '@/lib/guard';
 
 export const dynamic = 'force-dynamic';
@@ -39,6 +40,7 @@ export async function GET(req: Request) {
 
       return {
         ...r,
+        color: routeColorFor(g.session.role, r.color),
         live: running && view?.trip
           ? {
               confidence: view.trip.confidence,

@@ -365,6 +365,20 @@ a { color: inherit; }
 .strow[data-mine="true"] .strow-eta { color: var(--text); font-weight: 650; }
 .strow-eta-passed { font-size: 11.5px; color: var(--dimmer); }
 
+/* Skipped: the bus went on without coming here. A hollow, dashed node and a
+   struck-through name, so it can never be mistaken for a stop the bus
+   served — and an amber word on the right that says so outright. */
+.strow[data-state="skipped"] .strow-node {
+  background: var(--bg-1); border-color: var(--dimmer); border-style: dashed; box-shadow: none;
+}
+.strow[data-state="skipped"] .strow-name {
+  color: var(--dimmer);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--dimmer) 70%, transparent);
+}
+.strow[data-state="likely-skipped"] .strow-node { border-color: var(--warn); border-style: dashed; }
+.strow-eta-skipped { font-size: 11.5px; font-weight: 650; color: var(--warn); white-space: nowrap; }
+
 .strip-bus {
   position: absolute; left: 17px; width: 46px; display: grid; place-items: center;
   z-index: 3; pointer-events: none;
@@ -394,7 +408,9 @@ a { color: inherit; }
 }
 .map-style, .map-follow {
   font-size: 11.5px; font-weight: 550; padding: 8px 12px; border-radius: 10px;
-  color: var(--text); background: rgba(9,13,20,.82);
+  /* Fixed light text, not var(--text): this glass sits on the MAP, and a dark
+     map in the light app theme would otherwise get dark text on dark glass. */
+  color: #e8edf5; background: rgba(9,13,20,.82); color-scheme: dark;
   border: 1px solid rgba(255,255,255,.13);
   backdrop-filter: blur(14px) saturate(1.3);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
@@ -412,7 +428,7 @@ a { color: inherit; }
 
 .map-offline {
   position: absolute; right: 11px; bottom: 11px; z-index: 2;
-  font-size: 11px; color: var(--dim); padding: 7px 11px; border-radius: 9px;
+  font-size: 11px; color: #aab4c3; padding: 7px 11px; border-radius: 9px;
   background: rgba(9,13,20,.82); border: 1px solid rgba(255,255,255,.1);
   backdrop-filter: blur(14px); max-width: 58%;
 }
@@ -433,6 +449,12 @@ a { color: inherit; }
   border-color: #0b1018; box-shadow: 0 0 0 3px rgba(255,255,255,.85), 0 2px 8px rgba(0,0,0,.4);
 }
 .stop-marker[data-estimated="true"] { border-style: dashed; opacity: .8; }
+/* A skipped stop on the map: hollow and grey, so the eye reads the spur the
+   bus never drove as empty rather than as a row of served stops. */
+.stop-marker[data-state="skipped"] {
+  background: transparent; border-color: #94a3b8; border-style: dashed; opacity: .8;
+}
+.stop-marker[data-state="likely-skipped"] { border-color: var(--warn); border-style: dashed; }
 
 .campus-marker {
   z-index: 2;
@@ -623,7 +645,7 @@ input[type='range'] { accent-color: var(--accent); width: 100%; }
 .map-expand {
   position: absolute; top: 11px; left: 11px; z-index: 3;
   font-size: 11.5px; font-weight: 600; padding: 8px 12px; border-radius: 10px;
-  color: var(--text); background: rgba(9,13,20,.82);
+  color: #e8edf5; background: rgba(9,13,20,.82);
   border: 1px solid rgba(255,255,255,.13);
   backdrop-filter: blur(14px) saturate(1.3);
   -webkit-backdrop-filter: blur(14px) saturate(1.3);
@@ -640,7 +662,11 @@ input[type='range'] { accent-color: var(--accent); width: 100%; }
   background: rgba(255,255,255,.9);
   color: #0b1018;
   border-color: rgba(0,0,0,.14);
+  color-scheme: light;
 }
+/* The open list follows the map's chrome, so every option stays readable. */
+.map-style option { background: #121822; color: #e8edf5; }
+.map-wrap[data-dark="false"] .map-style option { background: #fff; color: #0b1018; }
 .map-wrap[data-dark="false"] .map-follow[data-on="true"] {
   background: var(--accent); color: #fff; border-color: var(--accent);
 }
@@ -1586,6 +1612,15 @@ html, body { max-width: 100%; }
 }
 .dv-hint { font-size: 12px; color: var(--dim); text-align: center; }
 
+/* The one-time "stop your phone killing the app" steps. Numbered, because
+   they are menu paths to follow in order on a phone in the other hand. */
+.ka-steps {
+  margin: 0 17px 15px; padding-left: 21px;
+  display: grid; gap: 9px;
+  font-size: 13.5px; line-height: 1.45; color: var(--ink);
+}
+.ka-steps li::marker { color: var(--warn); font-weight: 700; }
+
 /* ==========================================================================
    ADMIN  —  the transport office
    ========================================================================== */
@@ -2235,3 +2270,86 @@ html, body { max-width: 100%; }
   transition: background var(--fast) var(--ease);
 }
 .mystop-edit:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+/* A pickup point students use that the office's timetable does not list. */
+.bp-extra, .strow-extra {
+  display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .02em; vertical-align: middle;
+  color: var(--dim); background: color-mix(in srgb, var(--dim) 14%, transparent);
+}
+
+/* The office's to-do: students whose stop came from a guess. */
+.adm-nostop { color: var(--warn); }
+.adm-review { margin-top: 14px; padding: 14px 16px; }
+.adm-review summary { cursor: pointer; display: flex; flex-direction: column; gap: 2px; list-style: none; }
+.adm-review summary span { color: var(--dim); font-size: 13px; }
+.adm-review-group { margin-top: 14px; }
+.adm-review-route { font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.adm-review-row { padding: 8px 0; border-top: 1px solid var(--line, rgba(255,255,255,.08)); font-size: 14px; }
+.adm-review-note { color: var(--dim); font-size: 13px; margin-top: 2px; }
+
+/* ---------------------------------------------------------------- theme switch
+   The new theme spreads from the tap point with a feathered edge (a radial
+   mask whose radius is an animatable custom property). Light glows up past
+   normal brightness and settles; dark spreads over the light screen, which
+   stays untouched until the edge reaches it. See applyTheme() in components/ThemeToggle.tsx. */
+@property --reveal {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+html[data-theme-to]::view-transition-old(root),
+html[data-theme-to]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html[data-theme-to]::view-transition-new(root) {
+  /* Solid inside, a 160px soft rim, clear outside. */
+  mask-image: radial-gradient(circle at var(--tx) var(--ty),
+    #000 calc(var(--reveal) - 160px),
+    rgba(0, 0, 0, .55) calc(var(--reveal) - 70px),
+    transparent var(--reveal));
+}
+html[data-theme-to='light']::view-transition-new(root) {
+  animation: theme-reveal 1s cubic-bezier(.55, 0, .25, 1) forwards,
+             theme-glow-up 1.15s ease-out forwards;
+}
+html[data-theme-to='light']::view-transition-old(root) {
+  animation: theme-warm 1s ease-in forwards;
+}
+html[data-theme-to='dark']::view-transition-new(root) {
+  animation: theme-reveal 1.05s cubic-bezier(.6, 0, .3, 1) forwards,
+             theme-dark-settle 1.05s ease-out forwards;
+}
+/* The light screen stays exactly as it is until the dark reaches it: only
+   the spreading edge darkens it, never the whole page at once. */
+html[data-theme-to='dark']::view-transition-old(root) {
+  animation: none;
+}
+@keyframes theme-reveal {
+  from { --reveal: 0px; }
+  to   { --reveal: calc(var(--tr) + 180px); }
+}
+/* Light arrives a little dim, overshoots bright, then settles: a glow up. */
+@keyframes theme-glow-up {
+  0%   { filter: brightness(.6) saturate(.75); }
+  55%  { filter: brightness(1.12) saturate(1.08); }
+  100% { filter: none; }
+}
+/* The dark screen being replaced warms as the light reaches it. */
+@keyframes theme-warm {
+  to { filter: brightness(1.35) saturate(1.1); }
+}
+/* Dark lands a touch deep and lifts to its true level. */
+@keyframes theme-dark-settle {
+  0%   { filter: brightness(.55); }
+  100% { filter: none; }
+}
+/* No View Transitions: fade the colours instead. */
+html.theme-fade, html.theme-fade *, html.theme-fade *::before, html.theme-fade *::after {
+  transition: background-color .6s ease, color .6s ease, border-color .6s ease,
+              fill .6s ease, box-shadow .6s ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theme-fade, html.theme-fade * { transition-duration: .2s !important; }
+}

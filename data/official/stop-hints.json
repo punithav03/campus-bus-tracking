@@ -1,0 +1,94 @@
+{
+  "_about": [
+    "Where each official stop is, when the automatic lookup cannot be trusted to find it.",
+    "Keyed by bus id, then by the stop name EXACTLY as on the office's timing sheet.",
+    "  {lat, lng, src}   pin it here. src says what the pin is based on.",
+    "  {place: 'Name'}   use the OpenStreetMap place with this name (nearest to the route).",
+    "  {unknown: true}   nobody can say yet; the stop is placed along the road by its time",
+    "                    and shown as approximate until a recorded ride or the office pins it.",
+    "Stops not listed here are found automatically from OpenStreetMap by name, checked",
+    "against the order and the times on the sheet. build-report.md lists every choice made.",
+    "'halt' = the bus was recorded standing there on 2026-10-13 (data/traces)."
+  ],
+  "chittoor": {
+    "G.D.NELLORE": { "place": "Gangadharanellore" },
+    "GANGAMMA GUDI": { "unknown": true },
+    "AMMAPALLI CROSS": { "unknown": true },
+    "CHITHAMANDI": { "unknown": true },
+    "RKVB PETA": { "unknown": true }
+  },
+  "penumur": {
+    "T.K.M PURAM": { "unknown": true },
+    "RKM PURAM": { "unknown": true }
+  },
+  "chandragiri": {
+    "BALAJI COLONY": { "lat": 13.630081, "lng": 79.410917, "src": "OSM bus stop 'Balaji Colony'" },
+    "DR MAHAL": { "lat": 13.625346, "lng": 79.423831, "src": "OSM 'D.R. Mahal Road'" },
+    "LAKSHMIPURAM CIRCLE": { "unknown": true },
+    "MULLAPUDI": { "unknown": true }
+  },
+  "srikalahasti": {
+    "ANJIMEDU": { "place": "Peddaanjimedu" },
+    "GAJULAMANDAYAM": { "unknown": true },
+    "GOLLPALLI": { "unknown": true }
+  },
+  "nagalapuram": {
+    "NAGALAPURAM": { "lat": 13.386142, "lng": 79.796865, "src": "recorded ride (route-1), bus stand" },
+    "RAMAGIRI": { "lat": 13.396459, "lng": 79.765935, "src": "recorded ride (route-1)" },
+    "PICHATUR BYPASS": { "lat": 13.400575, "lng": 79.749452, "src": "OSM bus stop 'Pichatoor Bypass' (east end; fits the sheet's order)" },
+    "KEELAPUDI": { "lat": 13.395769, "lng": 79.737251, "src": "recorded ride (route-1)" },
+    "NINDRA": { "lat": 13.38384, "lng": 79.706918, "src": "recorded ride (route-1), Nindra 1" },
+    "VEDHANTHAPURAM": { "unknown": true },
+    "PALAMANGALAM": { "lat": 13.410711, "lng": 79.682167, "src": "recorded ride (route-1)" },
+    "CHITTOOR KANDRIGA": { "lat": 13.406688, "lng": 79.650793, "src": "recorded ride (route-1)" },
+    "VETHALATADUKU": { "lat": 13.411376, "lng": 79.6098, "src": "recorded ride (route-1)" },
+    "NARAYANAVANAM BYPASS": { "lat": 13.42214, "lng": 79.58422, "src": "halt (KVB Puram bus, 19 s) on the road both buses drive" }
+  },
+  "vijayapuram": {
+    "SRI HARIPURAM": { "lat": 13.22967, "lng": 79.76518, "src": "halt, end of the evening run" },
+    "MAHAVIRAPURAM": { "lat": 13.28382, "lng": 79.70928, "src": "halt 27 s at Pedda Mahaveerapuram" },
+    "VIJAYAPURAM": { "lat": 13.27087, "lng": 79.70022, "src": "halt 85 s, Vijayapuram" },
+    "JAGANADHAPURAM": { "lat": 13.31562, "lng": 79.71833, "src": "halt 25 s, turning for Jagannadhapuram" },
+    "PANNUR SUB STATION": { "lat": 13.32906, "lng": 79.6989, "src": "halt 44 s" },
+    "NETTIRI CROSS": { "lat": 13.34373, "lng": 79.67208, "src": "halt 20 s at Pannuru X Roads (the Netteri turning)" },
+    "KAIPAKAM": { "lat": 13.34189, "lng": 79.6639, "src": "halt 13 s, nearest village Karpakam" },
+    "B.G.KANDRIGA": { "lat": 13.31913, "lng": 79.63134, "src": "halt 61 s near Buggakandriga" },
+    "DESAMMA GUDI": { "unknown": true },
+    "MANDAPAM": { "lat": 13.344849, "lng": 79.579377, "src": "OSM 'Sai Baba Kalyana Mandapam' on the highway" },
+    "PANDURAJUPURAM": { "lat": 13.37053, "lng": 79.5723, "src": "halt 12 s between Mandapam and Kailasapuram" },
+    "PARAMESWAR MANGALAM": { "lat": 13.39465, "lng": 79.56535, "src": "halt 12 s, Parameswara Mangalam" }
+  },
+  "tirupati": {
+    "TOWN CLUB": { "lat": 13.6303, "lng": 79.4115, "src": "Town Club is on Prakasam Road, Balaji Colony; the bus halted 47 s at this junction" },
+    "ISKON TEMPLE": { "lat": 13.64685, "lng": 79.41368, "src": "OSM 'ISKCON - Sri Sri Radha Govinda Mandir'" },
+    "MUNCIPAL PARK": { "lat": 13.64675, "lng": 79.42552, "src": "OSM 'Prakasam Municipal Park'" },
+    "LEELA MAHAL": { "lat": 13.641813, "lng": 79.42769, "src": "OSM 'Leela Mahal Circle'" },
+    "TMC": { "lat": 13.63626, "lng": 79.4229, "src": "OSM 'Municipal Office' (Tirupati Municipal Corporation)" },
+    "SRINIVASAM": { "lat": 13.63151, "lng": 79.42859, "src": "OSM 'Srinivasam Complex'" },
+    "BLISS CIRCLE": { "lat": 13.62603, "lng": 79.4315, "src": "halt 31 s by 'Ekante Bliss'" },
+    "NARAYANDRI HOSPITAL": { "lat": 13.62913, "lng": 79.46335, "src": "OSM bus stop 'Aster Narayanadri Hospital', halt 25 s" },
+    "RENIGUNTA": { "lat": 13.63887, "lng": 79.5092, "src": "halt 17 s, Renigunta" },
+    "OIL FACTORY": { "lat": 13.61527, "lng": 79.50658, "src": "halt 32 s on the Renigunta-Puttur road" },
+    "TADUKU STATION": { "place": "Taduku" }
+  },
+  "sathrawada": {
+    "V K R PURAM": { "unknown": true },
+    "GUDDIKANDRIGA": { "lat": 13.298238, "lng": 79.585582, "src": "OSM hamlet Guddikandriga (the one by Nagari)" },
+    "KEELAPUDI": { "unknown": true },
+    "MANDAPAM": { "lat": 13.344849, "lng": 79.579377, "src": "OSM 'Sai Baba Kalyana Mandapam' on the highway" },
+    "CHINTHALAPATTEDA": { "unknown": true }
+  },
+  "kvb-puram": {
+    "KVB PURAM": { "lat": 13.533061, "lng": 79.738444, "src": "OSM bus stop 'K V B Puram'" },
+    "RAYAPEDU": { "lat": 13.515345, "lng": 79.734513, "src": "OSM bus stop, halt 12 s" },
+    "SADASHIVAPURAM": { "lat": 13.501995, "lng": 79.732646, "src": "OSM bus stop 'Sadasiva Puram', halt 12 s" },
+    "M R KANDRIGA": { "unknown": true },
+    "MIDHI KANDRIGA": { "lat": 13.459486, "lng": 79.726192, "src": "OSM bus stop 'Middi Khandriga'" },
+    "ADDALAMEDA": { "unknown": true },
+    "T K PURAM": { "lat": 13.437787, "lng": 79.732273, "src": "OSM hamlet 'T K Puram Hw'" },
+    "PICHATUR": { "lat": 13.400087, "lng": 79.738364, "src": "OSM bus stop 'Pichatoor Center', halt 34 s" },
+    "KOPPEDU": { "lat": 13.410745, "lng": 79.703007, "src": "recorded ride (route-1), Koppedu 1" },
+    "NAYANAR KANDRIGA": { "place": "Nainarukandriga" },
+    "NARAYANAVANAM": { "lat": 13.42214, "lng": 79.58422, "src": "halt 19 s" }
+  }
+}
