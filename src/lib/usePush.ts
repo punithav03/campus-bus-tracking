@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getJSON } from './api';
 
 /**
  * Turning notifications on, from the browser's side.
@@ -38,7 +39,14 @@ export function usePush() {
       return;
     }
     try {
-      const info = await (await fetch('/api/push', { cache: 'no-store' })).json();
+      const r = await getJSON<{ available?: boolean; publicKey?: string; problem?: string; leadMin?: number }>('/api/push');
+      if (!r.ok) {
+        // Server not answering is not "notifications unavailable" — that
+        // hid the "Turn on" card for good after one slow request. Ask again.
+        retry.current = setTimeout(() => void refreshRef.current(), 8000);
+        return;
+      }
+      const info = r.data;
       if (!info.available || !info.publicKey) { setProblem(info.problem ?? null); setState('unavailable'); return; }
       setLeadMin(info.leadMin ?? 5);
 
@@ -54,13 +62,21 @@ export function usePush() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  const retry = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
+  useEffect(() => {
+    void refresh();
+    return () => { if (retry.current) clearTimeout(retry.current); };
+  }, [refresh]);
 
   const enable = useCallback(async (lead = leadMin) => {
     setError(null);
     setState('working');
     try {
-      const info = await (await fetch('/api/push', { cache: 'no-store' })).json();
+      const got = await getJSON<{ publicKey?: string }>('/api/push');
+      if (!got.ok) throw new Error('Could not reach the server. Try again.');
+      const info = got.data;
       if (!info.publicKey) throw new Error('Notifications are not set up on the server.');
 
       const permission = await Notification.requestPermission();

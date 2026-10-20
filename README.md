@@ -205,9 +205,10 @@ demo run from the office screen, and every card that would be sent is written to
 | `/record` | route capture | driver or office |
 
 One login box for everyone; the server works out who you are. The first password is the
-admission number (students) or the mobile number (drivers). Those are things other people
-know, so **until it is replaced the server answers nothing but the password change**, and
-the new one cannot be the ID. A student or driver only ever sees their own bus: the route
+admission number (students) or the mobile number (drivers), and it opens the app straight
+away; anyone can change it in Settings (the new one cannot be the ID). A forced change on
+first sign-in exists but is switched off at the college's request — set
+`FORCE_PASSWORD_CHANGE` in `src/lib/session.ts` to bring it back. A student or driver only ever sees their own bus: the route
 comes from the signed session, never from the request. Five wrong passwords lock an ID
 for ten minutes.
 

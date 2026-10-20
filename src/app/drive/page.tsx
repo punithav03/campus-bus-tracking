@@ -12,6 +12,7 @@ import {
 } from '@/lib/trip-session';
 import { useSession } from '@/lib/useSession';
 import { haptic } from '@/lib/device';
+import { getJSON } from '@/lib/api';
 import { fmtGap } from '@/lib/format';
 import type { RouteSummary } from '@/lib/types';
 
@@ -59,11 +60,21 @@ function DriveInner() {
     return () => clearInterval(id);
   }, [t.running]);
 
+  // Keeps asking until it gets an answer. Asked once, a single failed request
+  // left the card on "Loading…" for the whole morning.
   useEffect(() => {
-    fetch('/api/network', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => setRoute(j.routes?.[0] ?? null))
-      .catch(() => setLoadErr('Could not load your route — check your connection.'));
+    let dead = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const load = async () => {
+      const r = await getJSON<{ routes?: RouteSummary[] }>('/api/network');
+      if (dead) return;
+      if (r.ok) { setRoute(r.data.routes?.[0] ?? null); setLoadErr(null); return; }
+      if (r.status === 401) { location.href = '/login'; return; }
+      setLoadErr('Could not load your route — check your connection. Retrying…');
+      timer = setTimeout(load, 10_000);
+    };
+    void load();
+    return () => { dead = true; if (timer) clearTimeout(timer); };
   }, []);
 
   const routeId = route?.id ?? user?.routeId ?? '';

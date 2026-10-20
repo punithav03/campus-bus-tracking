@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { haptic } from '@/lib/device';
+import { getJSON } from '@/lib/api';
 
 /**
  * Choosing where you get on.
@@ -41,22 +42,40 @@ export function BoardingPicker({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const have = useRef(false);
 
   const load = async () => {
     setLoading(true);
-    try {
-      const j = await (await fetch('/api/me/stop', { cache: 'no-store' })).json();
-      setRoute(j.route ?? null);
-      setStops(j.stops ?? []);
-      setChosen(j.current ?? null);
-      setError(null);
-    } catch {
-      setError('Could not load the stops. Check your connection.');
+    setError(null);
+    const r = await getJSON<{ route?: RouteInfo | null; stops?: StopOption[]; current?: string | null }>('/api/me/stop');
+    if (r.ok) {
+      setRoute(r.data.route ?? null);
+      setStops(r.data.stops ?? []);
+      have.current = !!r.data.stops?.length;
+      setChosen((c) => c ?? r.data.current ?? null);
+      if (!r.data.stops?.length) setError('No stops are set up for your bus yet. Please contact the transport office.');
+    } else if (r.status === 401) {
+      window.location.href = '/login';
+      return;
+    } else {
+      // Never a blank list with nothing to tap: say so, and offer a retry.
+      setError(r.status === 0
+        ? 'Could not load the stops. Check your connection.'
+        : 'The server is busy. Please try again.');
     }
     setLoading(false);
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    // Came back online, or back to the app after switching away: if the
+    // list never arrived, fetch it again without making them tap.
+    const again = () => { if (document.visibilityState === 'visible' && !have.current) void load(); };
+    window.addEventListener('online', again);
+    document.addEventListener('visibilitychange', again);
+    return () => { window.removeEventListener('online', again); document.removeEventListener('visibilitychange', again); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function save() {
     if (!chosen || busy) return;
@@ -125,7 +144,16 @@ export function BoardingPicker({
           ))}
       </div>
 
-      {error && <div className="note" style={{ borderLeftColor: 'var(--bad)' }}>{error}</div>}
+      {error && (
+        <div className="note" style={{ borderLeftColor: 'var(--bad)' }}>
+          {error}
+          {!loading && !stops.length && (
+            <button className="btn" style={{ marginTop: 10, display: 'flex' }} onClick={() => { haptic('tick'); void load(); }}>
+              Try again
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="bp-foot">
         {pick && (

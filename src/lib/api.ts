@@ -97,3 +97,40 @@ async function postNative(url: string, body: unknown): Promise<PostResult | null
     return null;   // let the web path try
   }
 }
+
+// ---------------------------------------------------------------------------
+
+export type GetResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; status: number };
+
+/**
+ * GET some JSON, and keep trying for a while before giving up.
+ *
+ * The free server sleeps, and the first requests after it wakes can be slow
+ * or come back as an error page. A screen that took that first failure as
+ * the answer stayed blank — the boarding picker showed no stops and nothing
+ * to tap, and the student had to close the app several times to get past it.
+ * So: a timeout per try, a few tries with a growing pause, and only then a
+ * failure the screen has to show. Sign-in problems (401/403) are answers,
+ * not hiccups, and come back at once.
+ */
+export async function getJSON<T>(url: string, tries = 4, timeoutMs = 12_000): Promise<GetResult<T>> {
+  let status = 0;
+  for (let i = 0; i < tries; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 1000 * 2 ** (i - 1)));
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    try {
+      const r = await fetch(url, { cache: 'no-store', signal: ctl.signal });
+      status = r.status;
+      if (r.status === 401 || r.status === 403) return { ok: false, status };
+      if (r.ok) return { ok: true, data: (await r.json()) as T };
+    } catch {
+      status = 0;   // offline, timed out, or not JSON — try again
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { ok: false, status };
+}

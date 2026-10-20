@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { Role } from './session';
+import { getJSON } from './api';
 
 /**
  * Who is signed in, on the client.
@@ -31,16 +32,20 @@ function broadcast() { for (const fn of listeners) fn(cached); }
 async function fetchMe(): Promise<User | null> {
   if (inflight) return inflight;
   inflight = (async () => {
-    try {
-      const r = await fetch('/api/auth/me', { cache: 'no-store' });
-      const j = await r.json();
-      cached = (j?.user ?? null) as User | null;
-    } catch {
-      // Offline. Treat as unknown rather than signed out — throwing a student
-      // back to the login screen because a tunnel ate one request would be
-      // worse than showing a stale name.
-      cached = cached ?? null;
+    const r = await getJSON<{ user?: User | null }>('/api/auth/me');
+    if (r.ok) {
+      cached = r.data?.user ?? null;
+    } else if (cached === undefined) {
+      // The server did not answer — that is NOT "signed out". Treating it as
+      // signed out threw students back to the login screen whenever the free
+      // server was slow to wake. Keep the loading screen and ask again.
+      setTimeout(() => { if (cached === undefined) void fetchMe(); }, 3000);
+      inflight = null;
+      return null;
     }
+    // Otherwise offline with an answer already in hand: keep it — throwing a
+    // student back to the login screen because a tunnel ate one request
+    // would be worse than showing a stale name.
     inflight = null;
     broadcast();
     return cached ?? null;

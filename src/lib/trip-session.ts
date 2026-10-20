@@ -105,6 +105,10 @@ export async function resumeTripIfRunning(): Promise<void> {
 
   try {
     const r = await fetch(`/api/state?route=${routeId}`, { cache: 'no-store' });
+    // An error page says nothing about the trip. Reading it as "not running"
+    // forgot a live run whenever the app was reopened while the server was
+    // slow, and the bus quietly stopped broadcasting mid-route.
+    if (!r.ok) return;
     const j = await r.json();
     if (j?.trip?.status !== 'running') { remember(null); return; }
   } catch {
@@ -182,7 +186,14 @@ export async function startTrip(
   // A resumed trip is already open on the server; starting it again would
   // throw away everything it has learned about this run so far.
   if (!opts.resumed) {
-    await postJSON('/api/trip', { routeId, action: 'start' });
+    // A few tries: the first request of the morning may hit a server still
+    // waking. Tracking starts regardless — the first pings open a trip too.
+    for (let i = 0; i < 3; i++) {
+      try {
+        if ((await postJSON('/api/trip', { routeId, action: 'start' })).ok) break;
+      } catch { /* offline */ }
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
   }
 
   // Only in a browser. In the app the foreground service does not need the

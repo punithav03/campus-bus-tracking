@@ -33,6 +33,16 @@ export interface Session {
 }
 
 export const COOKIE = 'svpcet_session';
+
+/**
+ * Make a first sign-in choose a new password before anything else.
+ *
+ * Off at the college's request: students and drivers sign in with their ID
+ * as the password and go straight in. They can still change it any time in
+ * Settings. Set to true to bring the forced change back — every account the
+ * office creates is still marked, so it applies again at once.
+ */
+export const FORCE_PASSWORD_CHANGE = false;
 const MAX_AGE_S = 60 * 60 * 24 * 30;   // a month; a student should not re-login weekly
 
 function secret(): string {
@@ -81,6 +91,8 @@ export function verifySession(token: string | undefined | null): Session | null 
     const s = JSON.parse(unb64u(parts[1]).toString('utf8')) as Session;
     if (!s.sub || !s.role || typeof s.exp !== 'number') return null;
     if (s.exp * 1000 < Date.now()) return null;
+    // Also clears it on cookies issued while the forced change was on.
+    if (!FORCE_PASSWORD_CHANGE) s.mustChangePassword = false;
     return s;
   } catch {
     return null;

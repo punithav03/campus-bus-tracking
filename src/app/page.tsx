@@ -9,6 +9,7 @@ import { haptic } from '@/lib/device';
 import { useSession } from '@/lib/useSession';
 import { PasswordGate } from '@/components/PasswordGate';
 import { BoardingGate } from '@/components/BoardingGate';
+import { getJSON } from '@/lib/api';
 import { NotifyCard } from '@/components/NotifyCard';
 import { WaitingButton } from '@/components/WaitingButton';
 
@@ -71,12 +72,14 @@ function HomeInner() {
 
     const load = async () => {
       try {
-        const r = await fetch('/api/me/transport', { cache: 'no-store' });
+        // Retries on its own, so a server still waking up costs a few seconds
+        // of loading, not a 15-second "could not reach the server".
+        const r = await getJSON<Transport>('/api/me/transport');
         // Signed out, or the account was changed by the office: sign in again
         // rather than showing "could not reach the server" forever.
-        if (r.status === 401) { router.replace('/login'); return; }
+        if (!r.ok && r.status === 401) { router.replace('/login'); return; }
         if (!r.ok) throw new Error(String(r.status));
-        const j = (await r.json()) as Transport;
+        const j = r.data;
         if (!alive) return;
         setT(j);
         setErr(null);

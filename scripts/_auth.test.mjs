@@ -122,12 +122,12 @@ const goodCsv = await post('/api/admin/students',
 ok('valid row imported', goodCsv.status === 200 && goodCsv.body.total === 1);
 const newStu = await login(TEST_ROLL, TEST_ROLL);
 ok('imported student can sign in', newStu.status === 200);
-ok('imported student must change password', newStu.body.user?.mustChangePassword === true);
+ok('imported student is not forced to change password', newStu.body.user?.mustChangePassword === false);
 ok('student cannot import', (await post('/api/admin/students', { csv: 'x' }, stu.cookie)).status === 403);
-// The first password is the admission number - guessable. Until it is
-// replaced, the server answers nothing but the password change.
-ok('a first password opens nothing but the password change',
-  (await get('/api/state', newStu.cookie)).status === 403 && (await get('/api/me/transport', newStu.cookie)).status === 403);
+// The forced first-password change is switched off (FORCE_PASSWORD_CHANGE in
+// src/lib/session.ts): a first sign-in with the ID goes straight in.
+ok('a first sign-in opens the app straight away',
+  (await get('/api/state', newStu.cookie)).status === 200 && (await get('/api/me/transport', newStu.cookie)).status === 200);
 ok('the new password cannot be the ID',
   (await post('/api/auth/password', { current: TEST_ROLL, next: TEST_ROLL.toLowerCase() }, newStu.cookie)).status === 400);
 

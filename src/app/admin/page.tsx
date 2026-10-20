@@ -53,10 +53,14 @@ function AdminInner() {
 
     const load = async () => {
       try {
-        const [n, f] = await Promise.all([
-          fetch('/api/network', { cache: 'no-store' }).then((r) => r.json()),
-          fetch('/api/admin/fleet', { cache: 'no-store' }).then((r) => r.json()),
-        ]);
+        const get = async (u: string) => {
+          const r = await fetch(u, { cache: 'no-store' });
+          if (r.status === 401) { location.href = '/login'; throw new Error('signed out'); }
+          // An error page is not an empty fleet: keep the last good numbers.
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json();
+        };
+        const [n, f] = await Promise.all([get('/api/network'), get('/api/admin/fleet')]);
         if (!alive) return;
         setRoutes(n.routes ?? []);
         setDrivers(f.drivers ?? []);

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { useSession } from '@/lib/useSession';
+import { getJSON } from '@/lib/api';
 import { StripMap } from '@/components/StripMap';
 import { BottomSheet, useMediaQuery } from '@/components/BottomSheet';
 import type { MapRoute, MapTrailSeg, MapStopState } from '@/components/MapView';
@@ -57,10 +58,13 @@ function resolveSavedStop(
 export function TrackClient({
   initialRoute,
   initialCampus,
+  initialStopId = null,
 }: {
   /** Rendered into the page by the server. Never null in practice. */
   initialRoute: MapRoute | null;
   initialCampus: Campus | null;
+  /** The student's boarding point on record, from the server. */
+  initialStopId?: string | null;
 }) {
   const { user } = useSession();
   // A student is picking a stop to stand at. A driver is driving the thing,
@@ -71,6 +75,8 @@ export function TrackClient({
 
   const [campus, setCampus] = useState<Campus | null>(initialCampus);
   const [routes, setRoutes] = useState<LiveRoute[]>([]);
+  const routesRef = useRef<LiveRoute[]>([]);
+  routesRef.current = routes;
   const [routeId, setRouteId] = useState<string | null>(initialRoute?.id ?? null);
   const [geom, setGeom] = useState<MapRoute | null>(initialRoute);
   // Read inside the retry loop without making it a dependency of the effect.
@@ -90,7 +96,7 @@ export function TrackClient({
   const trailBusy = useRef(false);
   const [myStopId, setMyStopId] = useState<string | null>(null);
   // The boarding point on the student's record — the sensible default.
-  const [registeredStopId, setRegisteredStopId] = useState<string | null>(null);
+  const [registeredStopId, setRegisteredStopId] = useState<string | null>(initialStopId);
   // Read inside the route-load effect without making it a dependency.
   const registeredStopRef = useRef<string | null>(null);
   registeredStopRef.current = registeredStopId;
@@ -142,20 +148,23 @@ export function TrackClient({
 
   // ---- network -------------------------------------------------------------
   const loadNetwork = useCallback(async () => {
-    try {
-      const r = await fetch('/api/network', { cache: 'no-store' });
-      const j = await r.json();
-      if (j.error) { setErr(j.error); return; }
-      // Clear it on success, or one bad poll locks the student on the error
-      // screen for the rest of the session even after the network comes back.
-      setErr(null);
-      setCampus(j.campus);
-      setRoutes(j.routes);
-      setRouteId((cur) => (cur && j.routes.some((r: { id: string }) => r.id === cur)
-        ? cur : j.routes[0]?.id ?? null));
-    } catch (e) {
-      setErr((e as Error).message);
+    const r = await getJSON<{ campus: Campus; routes: LiveRoute[] }>('/api/network');
+    if (!r.ok) {
+      if (r.status === 401) { location.href = '/login'; return; }
+      // Only take over the screen when there is nothing to show. This list is
+      // re-polled every 15 s, and one failed poll used to swap a working map
+      // (drawn from the server-rendered route) for "Can't reach the bus".
+      if (!routesRef.current.length && !geomRef.current) setErr('offline');
+      return;
     }
+    const j = r.data;
+    // Clear it on success, or one bad poll locks the student on the error
+    // screen for the rest of the session even after the network comes back.
+    setErr(null);
+    setCampus(j.campus);
+    setRoutes(j.routes);
+    setRouteId((cur) => (cur && j.routes.some((x) => x.id === cur)
+      ? cur : j.routes[0]?.id ?? null));
   }, []);
 
   useEffect(() => { void loadNetwork(); }, [loadNetwork]);
@@ -194,13 +203,22 @@ export function TrackClient({
    */
   const chooseStop = useCallback((id: string) => {
     haptic('select');
+    const before = registeredStopRef.current;
     setMyStopId(id);
     setRegisteredStopId(id);
     void fetch('/api/me/stop', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ stopId: id }),
-    }).catch(() => { /* the screen is already updated; it will sync next load */ });
+    }).then((r) => { if (!r.ok) throw new Error(String(r.status)); })
+      .catch(() => {
+        // Not saved: notifications would still count down to the old stop
+        // while this screen showed the new one. Put it back and say so.
+        setRegisteredStopId(before);
+        if (before) setMyStopId(before);
+        setShareMsg('Could not save your stop. Try again.');
+        setTimeout(() => setShareMsg(null), 3000);
+      });
   }, []);
 
   // ---- route geometry ------------------------------------------------------

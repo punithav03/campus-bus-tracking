@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { sql, one } from './db';
-import type { Role, Session } from './session';
+import { FORCE_PASSWORD_CHANGE, type Role, type Session } from './session';
 
 /**
  * Looking up a user and checking a password.
@@ -54,7 +54,7 @@ async function find(id: string): Promise<Account | null> {
 
 const acct = (r: Row, role: Role): Account => ({
   id: r.id, name: r.name, role, routeId: r.route_id,
-  passwordHash: r.password_hash, mustChangePassword: r.must_change_password,
+  passwordHash: r.password_hash, mustChangePassword: FORCE_PASSWORD_CHANGE && r.must_change_password,
 });
 
 /**

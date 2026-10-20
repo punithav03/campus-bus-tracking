@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/session';
 import { getRoute, getNetwork } from '@/lib/network';
 import { currentRouteId } from '@/lib/guard';
+import { one } from '@/lib/db';
 import { routeColorFor } from '@/lib/brand';
 import { TrackClient } from './TrackClient';
 
@@ -62,5 +63,18 @@ export default async function TrackPage({
       }
     : null;
 
-  return <TrackClient initialRoute={initialRoute} initialCampus={net.campus} />;
+  // The student's boarding point, printed in with the route. Left to a fetch
+  // after load, one failed request meant the map counted down to the FIRST
+  // stop on the line instead of theirs, and never corrected itself.
+  let initialStopId: string | null = null;
+  if (session.role === 'student') {
+    try {
+      const me = await one<{ stop_id: string | null }>(
+        'SELECT stop_id FROM students WHERE upper(roll_no) = upper($1)', [session.sub],
+      );
+      initialStopId = me?.stop_id ?? null;
+    } catch { /* the client asks again */ }
+  }
+
+  return <TrackClient initialRoute={initialRoute} initialCampus={net.campus} initialStopId={initialStopId} />;
 }
