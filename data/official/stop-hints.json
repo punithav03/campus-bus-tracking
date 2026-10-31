@@ -6,9 +6,11 @@
     "  {place: 'Name'}   use the OpenStreetMap place with this name (nearest to the route).",
     "  {unknown: true}   nobody can say yet; the stop is placed along the road by its time",
     "                    and shown as approximate until a recorded ride or the office pins it.",
+    "  _via: {STOP: {name, lat, lng, src}}   after STOP the bus drives through this place",
+    "                    (not a stop) on the way to the next stop.",
     "Stops not listed here are found automatically from OpenStreetMap by name, checked",
     "against the order and the times on the sheet. build-report.md lists every choice made.",
-    "'halt' = the bus was recorded standing there on 2026-10-13 (data/traces)."
+    "'halt' = the bus was recorded standing there (2026-10-13, or 2026-10-29 for Chandragiri; data/traces)."
   ],
   "chittoor": {
     "G.D.NELLORE": { "place": "Gangadharanellore" },
@@ -22,10 +24,12 @@
     "RKM PURAM": { "unknown": true }
   },
   "chandragiri": {
-    "BALAJI COLONY": { "lat": 13.630081, "lng": 79.410917, "src": "OSM bus stop 'Balaji Colony'" },
-    "DR MAHAL": { "lat": 13.625346, "lng": 79.423831, "src": "OSM 'D.R. Mahal Road'" },
-    "LAKSHMIPURAM CIRCLE": { "unknown": true },
-    "MULLAPUDI": { "unknown": true }
+    "MR PALLI": { "lat": 13.62181, "lng": 79.4101, "src": "halt 70 s (2026-10-29) where the bus turns at M R Palli" },
+    "BALAJI COLONY": { "lat": 13.628417, "lng": 79.408138, "src": "recorded ride 2026-10-29, nearest the bus comes to the Balaji Colony bus stop (350 m)" },
+    "DR MAHAL": { "lat": 13.622892, "lng": 79.424433, "src": "recorded ride 2026-10-29, bus stood at the D.R. Mahal Road junction" },
+    "LAKSHMIPURAM CIRCLE": { "lat": 13.61945, "lng": 79.43246, "src": "halt 19 s (2026-10-29) between DR Mahal and Tiruchanoor" },
+    "MULLAPUDI": { "unknown": true },
+    "PUTTUR": { "lat": 13.438157, "lng": 79.5522, "src": "recorded ride 2026-10-29, Puttur town centre on the road the bus drives (bus station is 340 m off it)" }
   },
   "srikalahasti": {
     "ANJIMEDU": { "place": "Peddaanjimedu" },
@@ -89,6 +93,9 @@
     "PICHATUR": { "lat": 13.400087, "lng": 79.738364, "src": "OSM bus stop 'Pichatoor Center', halt 34 s" },
     "KOPPEDU": { "lat": 13.410745, "lng": 79.703007, "src": "recorded ride (route-1), Koppedu 1" },
     "NAYANAR KANDRIGA": { "place": "Nainarukandriga" },
-    "NARAYANAVANAM": { "lat": 13.42214, "lng": 79.58422, "src": "halt 19 s" }
+    "NARAYANAVANAM": { "lat": 13.42214, "lng": 79.58422, "src": "halt 19 s" },
+    "_via": {
+      "T K PURAM": { "name": "Nagalapuram town", "lat": 13.386142, "lng": 79.796865, "src": "transport office: the KVB bus goes through Nagalapuram (2026-10-31); bus stand point from the Nagalapuram route" }
+    }
   }
 }

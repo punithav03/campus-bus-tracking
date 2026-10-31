@@ -1,6 +1,6 @@
 # Route build report
 
-Built 2026-10-19T08:37:49.406Z from Transport Route timings 2026-27.xlsx (2026-27).
+Built 2026-10-31T07:09:02.228Z from Transport Route timings 2026-27.xlsx (2026-27).
 `~` = approximate position (between neighbours, by time). ➕ = a student pickup point not on the office's sheet, found on the road the bus drives.
 
 ## 1. Chittoor (AP03TD4149, KBM Shafi)
@@ -59,7 +59,7 @@ Pickup points students gave that are not on the sheet:
 
 ## 3. Chandragiri (AP39WQ4798, A Eswar)
 
-53.2 km · 120 min on the sheet · 21 stops · no recorded ride yet
+49.4 km · 120 min on the sheet · 21 stops · follows recorded ride: chandragiri-2026-10-29-evening.gpx
 
 | # | Stop | Time | km | Placed by |
 |---|---|---|---|---|
@@ -67,32 +67,36 @@ Pickup points students gave that are not on the sheet:
 | 2 | Kaluru | 07:30 | 4.6 | OSM bus_stop 'Kalur Cross' |
 | 3 | Perumalapalli | 07:32 | 5.2 | OSM place=village 'Perumalapalle' (307 m from road) |
 | 4 | Mallavaram | 07:33 | 5.2 | OSM place=village 'Mallavaram' (624 m from road) |
-| 5 | Cherlopalli | 07:35 | 7.1 | OSM place=suburb 'Cherlopalli' (261 m from road) |
+| 5 | Cherlopalli | 07:35 | 7.1 | OSM bus_stop 'Cherlopalli (Tirupati)' |
 | 6 | ➕ Vidhya Nagar | 07:41 | 9.3 | student pickup point, not on the office's sheet; OSM place=quarter 'Vidya Nagar Colony' |
-| 7 | Balaji Colony | 07:50 | 12.6 | OSM bus stop 'Balaji Colony' |
-| 8 | MR Palli | 07:55 | 14.7 | OSM place=quarter 'M.R.Pally' |
-| 9 | Annamaya Circle | 08:00 | 16.4 | OSM junction=yes 'Annamya Circle' |
-| 10 | ➕ Chillies | 08:04 | 17.3 | student pickup point, not on the office's sheet; OSM amenity=restaurant 'Chillies Restaurant' |
-| 11 | DR Mahal | 08:05 | 17.6 | OSM 'D.R. Mahal Road' |
-| 12 | Lakshmipuram Circle ~ | 08:10 | 19.5 | approximate: placed between neighbouring stops by the timetable |
-| 13 | Tiruchanoor | 08:15 | 21.4 | OSM bus_stop 'Tiruchanuru' |
-| 14 | Mullapudi ~ | 08:20 | 22.7 | approximate: placed between neighbouring stops by the timetable |
-| 15 | Padipeta | 08:25 | 24.0 | OSM tourism=attraction 'PADI PETA' |
-| 16 | Kayampeta | 08:35 | 28.0 | OSM tourism=attraction 'KAYAM PETA' |
-| 17 | Pudi Gate | 08:40 | 31.4 | OSM place=village 'Pudi' (274 m from road) |
-| 18 | Vadamalapeta | 08:45 | 34.2 | OSM bus_station 'Vadamalpeta Bus Stop' |
-| 19 | Taduku | 09:00 | 42.1 | OSM place=village 'Taduku' |
-| 20 | Puttur | 09:10 | 47.8 | OSM bus_station 'APSRTC Bus Station , Puttur' |
-| 21 | SVPCET | 09:20 | 53.2 | campus |
+| 7 | Balaji Colony | 07:50 | 12.4 | recorded ride 2026-10-29, nearest the bus comes to the Balaji Colony bus stop (350 m) |
+| 8 | MR Palli | 07:55 | 13.2 | halt 70 s (2026-10-29) where the bus turns at M R Palli |
+| 9 | Annamaya Circle | 08:00 | 14.1 | OSM junction=yes 'Annamya Circle' |
+| 10 | ➕ Chillies | 08:04 | 14.8 | student pickup point, not on the office's sheet; OSM amenity=restaurant 'Chillies Restaurant' |
+| 11 | DR Mahal | 08:05 | 14.9 | recorded ride 2026-10-29, bus stood at the D.R. Mahal Road junction |
+| 12 | Lakshmipuram Circle | 08:10 | 16.1 | halt 19 s (2026-10-29) between DR Mahal and Tiruchanoor |
+| 13 | Tiruchanoor | 08:15 | 18.6 | OSM bus_stop 'Tiruchanuru' |
+| 14 | Mullapudi ~ | 08:20 | 19.9 | approximate: placed between neighbouring stops by the timetable |
+| 15 | Padipeta | 08:25 | 21.2 | OSM tourism=attraction 'PADI PETA' |
+| 16 | Kayampeta | 08:35 | 25.2 | OSM tourism=attraction 'KAYAM PETA' |
+| 17 | Pudi Gate | 08:40 | 28.6 | OSM place=village 'Pudi' (274 m from road) |
+| 18 | Vadamalapeta | 08:45 | 31.4 | OSM bus_station 'Vadamalpeta Bus Stop' |
+| 19 | Taduku | 09:00 | 39.3 | OSM place=village 'Taduku' |
+| 20 | Puttur | 09:10 | 44.5 | recorded ride 2026-10-29, Puttur town centre on the road the bus drives (bus station is 340 m off it) |
+| 21 | SVPCET | 09:20 | 49.4 | campus |
 
 Pickup points students gave that are not on the sheet:
 
-- **Chillies** (2 students): on the road, 30 m from Chillies Restaurant
+- **Chillies** (2 students): on the road, 34 m from Chillies Restaurant
 - **Padmavathipuram** (1 student): found at Padmavathi Flour Mill but not on this bus's road (3.4 km, 1.4 km away)
-- **Vidhya Nagar** (1 student): on the road, 48 m from Vidya Nagar Colony
+- **Vidhya Nagar** (1 student): on the road, 38 m from Vidya Nagar Colony
   PERUMALAPALLI: served from the main road, 307 m from the village centre
   MALLAVARAM: served from the main road, 624 m from the village centre
-  CHERLOPALLI: served from the main road, 261 m from the village centre
+  CHERLOPALLI → BALAJI COLONY: follows the recorded ride (5.2 km; the road router went round to 5.9 km)
+  BALAJI COLONY → MR PALLI: follows the recorded ride (0.9 km; the road router went round to 1.3 km)
+  ANNAMAYA CIRCLE → DR MAHAL: follows the recorded ride (0.8 km; the road router went round to 1.0 km)
+  DR MAHAL → LAKSHMIPURAM CIRCLE: follows the recorded ride (1.2 km; the road router went round to 2.8 km)
+  LAKSHMIPURAM CIRCLE → TIRUCHANOOR: follows the recorded ride (2.5 km; the road router went round to 4.1 km)
   PUDI GATE: served from the main road, 274 m from the village centre
   TADUKU: served from the main road, 64 m from the village centre
 
@@ -190,7 +194,7 @@ Pickup points students gave that are not on the sheet:
 
 ## 7. Tirupati (AP39WQ4796, J Shankar)
 
-52.2 km · 95 min on the sheet · 20 stops · follows recorded ride: tirupati-2026-10-13-evening.gpx
+50.9 km · 95 min on the sheet · 20 stops · follows recorded ride: tirupati-2026-10-13-evening.gpx
 
 | # | Stop | Time | km | Placed by |
 |---|---|---|---|---|
@@ -200,30 +204,32 @@ Pickup points students gave that are not on the sheet:
 | 4 | ➕ Is Mahal | 07:47 | 0.8 | student pickup point, not on the office's sheet; OSM amenity=theatre 'I.S.MAHAL THEATRE,NEHRU NAGAR,TIRUPATI' |
 | 5 | Medical College | 07:50 | 1.6 | OSM other 'S.V.Medical College' |
 | 6 | ISKCON Temple | 07:55 | 3.0 | OSM 'ISKCON - Sri Sri Radha Govinda Mandir' |
-| 7 | ➕ Anna Rao Circle | 07:59 | 4.2 | student pickup point, not on the office's sheet; OSM other 'Anna Rao Circle' |
-| 8 | ➕ Kt Road | 07:60 | 4.4 | student pickup point, not on the office's sheet; OSM road 'K.T.Road' |
-| 9 | Municipal Park | 08:05 | 5.9 | OSM 'Prakasam Municipal Park' |
-| 10 | ➕ Korlagunta | 08:09 | 7.0 | student pickup point, not on the office's sheet; OSM place=village 'Korlagunta' |
-| 11 | Leela Mahal | 08:10 | 7.4 | OSM 'Leela Mahal Circle' |
-| 12 | TMC | 08:15 | 10.0 | OSM 'Municipal Office' (Tirupati Municipal Corporation) |
-| 13 | Srinivasam | 08:20 | 11.1 | OSM 'Srinivasam Complex' |
-| 14 | Bliss Circle | 08:20 | 12.0 | halt 31 s by 'Ekante Bliss' |
-| 15 | Narayandri Hospital | 08:25 | 15.8 | OSM bus stop 'Aster Narayanadri Hospital', halt 25 s |
-| 16 | Renigunta | 08:30 | 21.7 | halt 17 s, Renigunta |
-| 17 | Oil Factory | 08:40 | 24.5 | halt 32 s on the Renigunta-Puttur road |
-| 18 | Taduku Station | 08:50 | 40.1 | OSM railway=station 'Taduku' |
-| 19 | Puttur | 09:05 | 47.3 | OSM place=town 'Puttur' |
-| 20 | SVPCET | 09:20 | 52.2 | campus |
+| 7 | ➕ Anna Rao Circle | 07:58 | 3.7 | student pickup point, not on the office's sheet; OSM other 'Anna Rao Circle' |
+| 8 | ➕ Kt Road | 07:60 | 4.1 | student pickup point, not on the office's sheet; OSM road 'K.T.Road' |
+| 9 | Municipal Park | 08:05 | 5.3 | OSM 'Prakasam Municipal Park' |
+| 10 | ➕ Korlagunta | 08:07 | 5.7 | student pickup point, not on the office's sheet; OSM place=village 'Korlagunta' |
+| 11 | Leela Mahal | 08:10 | 6.1 | OSM 'Leela Mahal Circle' |
+| 12 | TMC | 08:15 | 8.7 | OSM 'Municipal Office' (Tirupati Municipal Corporation) |
+| 13 | Srinivasam | 08:20 | 9.8 | OSM 'Srinivasam Complex' |
+| 14 | Bliss Circle | 08:20 | 10.7 | halt 31 s by 'Ekante Bliss' |
+| 15 | Narayandri Hospital | 08:25 | 14.5 | OSM bus stop 'Aster Narayanadri Hospital', halt 25 s |
+| 16 | Renigunta | 08:30 | 20.5 | halt 17 s, Renigunta |
+| 17 | Oil Factory | 08:40 | 23.3 | halt 32 s on the Renigunta-Puttur road |
+| 18 | Taduku Station | 08:50 | 38.8 | OSM railway=station 'Taduku' |
+| 19 | Puttur | 09:05 | 46.0 | OSM place=town 'Puttur' |
+| 20 | SVPCET | 09:20 | 50.9 | campus |
 
 Pickup points students gave that are not on the sheet:
 
-- **Korlagunta** (1 student): on the road, 37 m from Korlagunta
+- **Korlagunta** (1 student): on the road, 18 m from Korlagunta
 - **Gajulamandyam** (2 students): found at Gajulakandriga but not on this bus's road (9.0 km away)
 - **Balaji Colony** (3 students): on the road, 50 m from Balaji Colony
 - **Crime Police Station** (3 students): on the road, 28 m from Tirupati Crime  Police Station
-- **Anna Rao Circle** (1 student): on the road, 2 m from Anna Rao Circle
+- **Anna Rao Circle** (1 student): on the road, 0 m from Anna Rao Circle
 - **Is Mahal** (1 student): on the road, 123 m from I.S.MAHAL THEATRE,NEHRU NAGAR,TIRUPATI
 - **Kt Road** (1 student): on the road, 0 m from K.T.Road
+  ISKON TEMPLE → MUNCIPAL PARK: follows the recorded ride (2.3 km; the road router went round to 2.9 km)
+  MUNCIPAL PARK → LEELA MAHAL: follows the recorded ride (0.8 km; the road router went round to 1.5 km)
 
 ## 8. Sathrawada (AP03TD9639, A Antony)
 
@@ -254,7 +260,7 @@ Pickup points students gave that are not on the sheet:
 
 ## 9. KVB Puram (AP03TD9149, V Sudhakar)
 
-45.8 km · 100 min on the sheet · 16 stops · follows recorded ride: kvb-puram-2026-10-13-evening.gpx
+58.4 km · 100 min on the sheet · 16 stops · follows recorded ride: kvb-puram-2026-10-13-evening.gpx
 
 | # | Stop | Time | km | Placed by |
 |---|---|---|---|---|
@@ -267,17 +273,18 @@ Pickup points students gave that are not on the sheet:
 | 7 | Midhi Kandriga | 07:55 | 8.5 | OSM bus stop 'Middi Khandriga' |
 | 8 | Addalameda ~ | 08:00 | 10.3 | approximate: placed between neighbouring stops by the timetable |
 | 9 | T K Puram | 08:05 | 12.1 | OSM hamlet 'T K Puram Hw' |
-| 10 | Pichatur | 08:10 | 17.9 | OSM bus stop 'Pichatoor Center', halt 34 s |
-| 11 | Koppedu | 08:25 | 23.1 | recorded ride (route-1), Koppedu 1 |
-| 12 | Thumburu | 08:30 | 27.4 | OSM place=village 'Thumbur' (464 m from road) |
-| 13 | Nayanar Kandriga | 08:35 | 27.7 | OSM place=village 'Nainarukandriga' (240 m from road) |
-| 14 | Narayanavanam | 08:45 | 36.5 | halt 19 s |
-| 15 | Puttur | 08:55 | 39.2 | OSM bus_stop 'Puttur Bypass Bus Stop' |
-| 16 | SVPCET | 09:10 | 45.8 | campus |
+| 10 | Pichatur | 08:10 | 30.6 | OSM bus stop 'Pichatoor Center', halt 34 s |
+| 11 | Koppedu | 08:25 | 35.8 | recorded ride (route-1), Koppedu 1 |
+| 12 | Thumburu | 08:30 | 40.1 | OSM place=village 'Thumbur' (464 m from road) |
+| 13 | Nayanar Kandriga | 08:35 | 40.4 | OSM place=village 'Nainarukandriga' (240 m from road) |
+| 14 | Narayanavanam | 08:45 | 49.2 | halt 19 s |
+| 15 | Puttur | 08:55 | 51.8 | OSM bus_stop 'Puttur Bypass Bus Stop' |
+| 16 | SVPCET | 09:10 | 58.4 | campus |
 
 Pickup points students gave that are not on the sheet:
 
 - **Srinivasapuram** (1 student): on the road, 102 m from Marapureddikandriga
 - **Arai** (3 students): on the road, 128 m from Arai
+  T K PURAM → PICHATUR: drives through Nagalapuram town (transport office: the KVB bus goes through Nagalapuram (2026-10-31); bus stand point from the Nagalapuram route)
   THUMBURU: served from the main road, 464 m from the village centre
   NAYANAR KANDRIGA: served from the main road, 240 m from the village centre

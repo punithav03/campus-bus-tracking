@@ -45,7 +45,7 @@
    "short": "Chandragiri Bus",
    "color": "#22c55e",
    "schedStart": "07:20",
-   "lengthM": 53160,
+   "lengthM": 49420,
    "durationS": 7200,
    "stopCount": 21,
    "firstStop": "Chandragiri",
@@ -105,7 +105,7 @@
    "short": "Tirupati Bus",
    "color": "#3b82f6",
    "schedStart": "07:45",
-   "lengthM": 52156,
+   "lengthM": 50873,
    "durationS": 5700,
    "stopCount": 20,
    "firstStop": "Town Club",
@@ -135,7 +135,7 @@
    "short": "KVB Puram Bus",
    "color": "#84cc16",
    "schedStart": "07:30",
-   "lengthM": 45768,
+   "lengthM": 58438,
    "durationS": 6000,
    "stopCount": 16,
    "firstStop": "KVB Puram",
@@ -144,5 +144,5 @@
    "driver": "V Sudhakar"
   }
  ],
- "generatedAt": "2026-10-19T08:41:34.768Z"
+ "generatedAt": "2026-10-31T07:11:05.623Z"
 }

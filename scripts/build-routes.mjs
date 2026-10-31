@@ -127,6 +127,41 @@ function traceSegments(traces) {
   return near;
 }
 
+/**
+ * The road a recorded ride took between two points, as [lng, lat] in the
+ * direction a -> b, or null when the ride did not pass both closely or has a
+ * gap between them.
+ *
+ * Needed because rides are often recorded on the evening run. In a town, the
+ * morning bus drives the same streets the other way, and a one-way pair or a
+ * divided road makes the router loop round a block to get onto the carriageway
+ * the evening bus used: Tirupati put 1.7 km of loops into a 1.2 km leg.
+ */
+function traceSlice(traces, a, b) {
+  let best = null;
+  for (const tr of traces) {
+    const near = (p) => {
+      let bd = Infinity, bi = -1;
+      for (let i = 0; i < tr.pts.length; i++) {
+        const d = haversine(p.lat, p.lng, tr.pts[i].lat, tr.pts[i].lng);
+        if (d < bd) { bd = d; bi = i; }
+      }
+      return bd <= 60 ? bi : -1;
+    };
+    const ia = near(a), ib = near(b);
+    if (ia < 0 || ib < 0 || ia === ib) continue;
+    const lo = Math.min(ia, ib), hi = Math.max(ia, ib);
+    const seg = tr.pts.slice(lo, hi + 1).map((p) => [p.lng, p.lat]);
+    let gap = false;
+    for (let i = 1; i < seg.length && !gap; i++) gap = haversine(seg[i - 1][1], seg[i - 1][0], seg[i][1], seg[i][0]) > 300;
+    if (gap) continue;
+    if (ia > ib) seg.reverse();
+    const pts = [[a.lng, a.lat], ...seg, [b.lng, b.lat]];
+    if (!best || polylineLength(pts) < polylineLength(best)) best = pts;
+  }
+  return best;
+}
+
 function minDistToTrace(traces, lat, lng) {
   let best = Infinity;
   for (const tr of traces) for (const p of tr.pts) {
@@ -323,12 +358,33 @@ function buildBus(bus) {
       k++;
       next = known[k];
     }
-    let leg = busRoute(G, cur.s.snapped, next.s.snapped, biasFn);
+    // A place the bus drives through after this stop without stopping there
+    // (stop-hints "_via"): two legs, stop -> place -> next stop.
+    const viaPt = H._via?.[cur.s.name];
+    const viaSn = viaPt && snap(G, viaPt.lng, viaPt.lat, 300);
+    let leg;
+    if (viaSn) {
+      const a = busRoute(G, cur.s.snapped, viaSn, biasFn), b = a && busRoute(G, viaSn, next.s.snapped, biasFn);
+      if (a && b) {
+        leg = { pts: [...a.pts, ...b.pts.slice(1)] };
+        report.push(`  ${cur.s.name} → ${next.s.name}: drives through ${viaPt.name} (${viaPt.src})`);
+      }
+    }
+    leg ??= busRoute(G, cur.s.snapped, next.s.snapped, biasFn);
     if (!leg) {
       report.push(`  !! no road from ${cur.s.name} to ${next.s.name} — straight line used`);
       leg = { pts: [[cur.s.snapped.lng, cur.s.snapped.lat], [next.s.snapped.lng, next.s.snapped.lat]] };
     }
-    const pts = dedupe(leg.pts);
+    let pts = dedupe(leg.pts);
+    // The router went well round what the recorded bus drove: take the ride.
+    const rec = traces.length && !viaSn ? traceSlice(traces, cur.s.snapped, next.s.snapped) : null;
+    if (rec) {
+      const rl = polylineLength(rec), ll = polylineLength(pts);
+      if (ll - rl > Math.max(150, 0.1 * rl)) {
+        report.push(`  ${cur.s.name} → ${next.s.name}: follows the recorded ride (${(rl / 1000).toFixed(1)} km; the road router went round to ${(ll / 1000).toFixed(1)} km)`);
+        pts = dedupe(simplify(rec, 3));
+      }
+    }
     for (let j = 1; j < pts.length; j++) shape.push(pts[j]);
     total += legLen(pts);
     along.set(next.i, total);
