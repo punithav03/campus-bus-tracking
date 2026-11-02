@@ -1,6 +1,6 @@
 # Route build report
 
-Built 2026-10-31T07:09:02.228Z from Transport Route timings 2026-27.xlsx (2026-27).
+Built 2026-11-02T08:31:00.660Z from Transport Route timings 2026-27.xlsx (2026-27).
 `~` = approximate position (between neighbours, by time). ➕ = a student pickup point not on the office's sheet, found on the road the bus drives.
 
 ## 1. Chittoor (AP03TD4149, KBM Shafi)
@@ -35,27 +35,28 @@ Pickup points students gave that are not on the sheet:
 
 ## 2. Penumur (AP03TB7775, Yunis Basha)
 
-46.5 km · 85 min on the sheet · 14 stops · no recorded ride yet
+40.5 km · 85 min on the sheet · 14 stops · follows recorded ride: penumur-2026-11-02-morning.gpx
 
 | # | Stop | Time | km | Placed by |
 |---|---|---|---|---|
-| 1 | Penumuru | 07:50 | 0.0 | OSM place=village 'Penumuru' |
-| 2 | Jakkadona | 08:10 | 6.6 | OSM bus_station 'Jakkidonna Bus Stop' |
-| 3 | Aggichenu Palli | 08:15 | 10.4 | OSM place=village 'Aggichenupalle' |
-| 4 | Nallavengana Palli | 08:20 | 16.2 | OSM place=village 'Nallavenganapalle' (203 m from road) |
-| 5 | Pathagunta | 08:25 | 18.3 | OSM bus_station 'Pathagunta Bus Stop' |
-| 6 | Chavata Gunta | 08:30 | 21.7 | OSM bus_stop 'Chavatagunta' |
-| 7 | Komaragunta | 08:35 | 25.3 | OSM place=village 'Komaragunta' (819 m from road) |
-| 8 | Pachikapallam | 08:40 | 27.0 | OSM bus_stop 'Pachikapallam' |
-| 9 | T.K.M Puram ~ | 08:43 | 28.5 | approximate: placed between neighbouring stops by the timetable |
-| 10 | Mambedu | 08:45 | 29.5 | OSM place=village 'Mambedu' (1262 m from road) |
-| 11 | Balasalagunta | 08:45 | 29.6 | OSM place=hamlet 'Balasalagunta' |
-| 12 | RKM Puram ~ | 08:50 | 32.0 | approximate: placed between neighbouring stops by the timetable |
-| 13 | Karveti Nagaram | 09:05 | 39.1 | OSM bus_stop 'Karvetinagar Bus Stop' |
-| 14 | SVPCET | 09:15 | 46.5 | campus |
+| 1 | Penumuru | 07:50 | 0.0 | recorded ride 2026-11-02, where the bus starts in Penumuru |
+| 2 | Jakkadona | 08:10 | 6.0 | OSM bus_station 'Jakkidonna Bus Stop' |
+| 3 | Aggichenu Palli | 08:15 | 7.2 | recorded ride 2026-11-02: the bus stays on the main road; this is the turning for Aggichenupalle (village 2.4 km in) |
+| 4 | Nallavengana Palli | 08:20 | 10.5 | OSM place=village 'Nallavenganapalle' (203 m from road) |
+| 5 | Pathagunta | 08:25 | 12.6 | OSM bus_station 'Pathagunta Bus Stop' |
+| 6 | Chavata Gunta | 08:30 | 16.0 | OSM bus_stop 'Chavatagunta' |
+| 7 | Komaragunta | 08:35 | 19.7 | OSM place=village 'Komaragunta' (819 m from road) |
+| 8 | Pachikapallam | 08:40 | 21.3 | OSM bus_stop 'Pachikapallam' |
+| 9 | T.K.M Puram ~ | 08:43 | 22.8 | approximate: placed between neighbouring stops by the timetable |
+| 10 | Mambedu | 08:45 | 23.8 | OSM place=village 'Mambedu' (1262 m from road) |
+| 11 | Balasalagunta | 08:45 | 23.8 | OSM place=hamlet 'Balasalagunta' |
+| 12 | RKM Puram ~ | 08:50 | 26.2 | approximate: placed between neighbouring stops by the timetable |
+| 13 | Karveti Nagaram | 09:05 | 33.1 | OSM bus_stop 'Karvetinagar Bus Stop' |
+| 14 | SVPCET | 09:15 | 40.5 | campus |
   NALLAVENGANA PALLI: served from the main road, 203 m from the village centre
   KOMARAGUNTA: served from the main road, 819 m from the village centre
   MAMBEDU: served from the main road, 1262 m from the village centre
+  BALASALAGUNTA: served from the main road, 148 m from the village centre
 
 ## 3. Chandragiri (AP39WQ4798, A Eswar)
 

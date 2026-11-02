@@ -20,6 +20,8 @@
     "RKVB PETA": { "unknown": true }
   },
   "penumur": {
+    "PENUMURU": { "lat": 13.374972, "lng": 79.196607, "src": "recorded ride 2026-11-02, where the bus starts in Penumuru" },
+    "AGGICHENU PALLI": { "lat": 13.40922, "lng": 79.24536, "src": "recorded ride 2026-11-02: the bus stays on the main road; this is the turning for Aggichenupalle (village 2.4 km in)" },
     "T.K.M PURAM": { "unknown": true },
     "RKM PURAM": { "unknown": true }
   },

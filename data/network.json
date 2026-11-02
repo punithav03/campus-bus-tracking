@@ -30,7 +30,7 @@
    "short": "Penumur Bus",
    "color": "#a855f7",
    "schedStart": "07:50",
-   "lengthM": 46461,
+   "lengthM": 40515,
    "durationS": 5100,
    "stopCount": 14,
    "firstStop": "Penumuru",
@@ -144,5 +144,5 @@
    "driver": "V Sudhakar"
   }
  ],
- "generatedAt": "2026-10-31T07:11:05.623Z"
+ "generatedAt": "2026-11-02T08:32:52.449Z"
 }
